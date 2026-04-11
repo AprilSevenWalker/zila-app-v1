@@ -11,8 +11,13 @@ export interface ProjectTimelineItem {
   detail: string;
 }
 
+export interface ProjectUpdate {
+  label: string;
+  tone: ProjectTone;
+}
+
 export interface Project {
-  slug: string;
+  id: string;
   name: string;
   client: string;
   location: string;
@@ -20,131 +25,262 @@ export interface Project {
   stage: string;
   status: string;
   statusTone: ProjectTone;
-  health: string;
-  healthTone: ProjectTone;
-  dueLabel: string;
   budget: string;
   spent: string;
   reserved: string;
   progress: number;
+  dueLabel: string;
   cashNeeded: string;
   nextMilestone: string;
   owner: string;
   verifiedDays: number;
   updatedAt: string;
+  insight: string;
+  stateSignal: string;
   summary: string;
+  remaining: string;
+  financialImpact: string;
   zilaSays: string;
+  zilaSuggestionShort: string;
+  nextMoveTitle: string;
+  nextMoveSummary: string;
+  ifNoAction: string;
+  ifActionTaken: string;
+  primaryActionLabel: string;
+  secondaryActionLabel: string;
+  canUseSafetyNet?: boolean;
+  showSafetyNetAction?: boolean;
+  safetyNetShortfallText?: string;
+  safetyNetAmount?: string;
+  safetyNetRemaining?: string;
+  safetyNetDestination?: string;
+  recentUpdates: ProjectUpdate[];
+  suggestedActions: string[];
+  lastVerifiedAction?: string;
   tasks: ProjectTask[];
   timeline: ProjectTimelineItem[];
 }
 
 export const projects: Project[] = [
   {
-    slug: "harbour-road",
+    id: "harbour-road",
     name: "Harbour Road",
-    client: "Northline Developments",
+    client: "Harbour Road",
     location: "Fremantle",
-    category: "Fit-out",
-    stage: "Funding window",
-    status: "Needs funding",
+    category: "Project",
+    stage: "Cash watch",
+    status: "Watch",
     statusTone: "warning",
-    health: "Watch",
-    healthTone: "warning",
-    dueLabel: "$4.3k due Thu",
-    budget: "$28,400",
-    spent: "$19,860",
-    reserved: "$4,300",
-    progress: 72,
-    cashNeeded: "$4,300",
-    nextMilestone: "Electrical drawdown Thursday",
+    budget: "$22,000",
+    spent: "$18,000",
+    reserved: "$6,200",
+    progress: 82,
+    dueLabel: "Adjustment due by Friday",
+    cashNeeded: "$4,000",
+    nextMilestone: "Supplier top-up before Friday",
     owner: "Amara",
     verifiedDays: 13,
     updatedAt: "Updated 26 mins ago",
+    insight: "Costs increased this week. You are close to a shortfall by Friday, so a small adjustment will keep things steady.",
+    stateSignal: "Close to a shortfall by Friday. A small adjustment keeps this on track.",
     summary:
-      "A premium hospitality fit-out with a strong margin, but this week's supplier payment needs to be covered to keep the install sequence on time.",
+      "Costs climbed late in the week, but a small funding move before Friday should keep Harbour Road moving smoothly.",
+    remaining: "$4,000",
+    financialImpact: "You will be about $4,300 short by Friday unless funds are moved, and a small top-up now keeps delivery on track.",
     zilaSays:
-      "Move $4,300 into Harbour Road before Thursday to protect your install slot and avoid a margin leak from rush rescheduling.",
+      "Move funds into Harbour Road before Friday and the project should absorb this week's cost spike without interrupting delivery.",
+    zilaSuggestionShort: "Move $4.3k now and you stay fully on track",
+    nextMoveTitle: "Next move",
+    nextMoveSummary: "Move $4,300 now to keep Harbour Road on track",
+    ifNoAction: "Payment will fail by Friday",
+    ifActionTaken: "Project remains stable",
+    primaryActionLabel: "Move funds",
+    secondaryActionLabel: "Use Safety Net",
+    canUseSafetyNet: true,
+    showSafetyNetAction: true,
+    safetyNetShortfallText: "You're short $4,300",
+    safetyNetAmount: "$2,000",
+    safetyNetRemaining: "$4,200",
+    safetyNetDestination: "Harbour Road",
+    recentUpdates: [
+      { label: "Cost increase +$4,000", tone: "warning" },
+      { label: "Supplier timing shifted", tone: "warning" },
+      { label: "Delivery plan still on track", tone: "success" },
+      { label: "Payment due Friday", tone: "warning" },
+    ],
+    suggestedActions: ["Move funds", "Adjust budget"],
+    lastVerifiedAction: "Funds moved · Today · Verified",
     tasks: [
-      { title: "Move capital to project wallet", due: "Today", status: "Ready now" },
-      { title: "Confirm electrician drawdown", due: "Thursday", status: "Waiting reply" },
-      { title: "Send progress note to client", due: "Friday", status: "Drafted" },
+      { title: "Move funds to Harbour Road", due: "Today", status: "Ready now" },
+      { title: "Review supplier overrun", due: "Thursday", status: "Needs review" },
+      { title: "Confirm Friday payment", due: "Friday", status: "Pending" },
     ],
     timeline: [
-      { label: "This week", detail: "Electrical and custom joinery release" },
-      { label: "Next", detail: "Lighting install and defect sweep" },
-      { label: "Risk", detail: "Supplier slot expires in 2 days" },
+      { label: "Now", detail: "Monitor the cost increase and top up the project balance" },
+      { label: "Friday", detail: "Cover the gap before the supplier payment lands so the week stays on track" },
+      { label: "Next", detail: "Reforecast margin once this week's costs settle" },
     ],
   },
   {
-    slug: "atlas-yard",
-    name: "Atlas Yard",
-    client: "Atlas Civil",
+    id: "palm-estate",
+    name: "Palm Estate",
+    client: "Palm Estate",
     location: "Perth Metro",
-    category: "Site systems",
-    stage: "Delivery",
-    status: "On track",
+    category: "Project",
+    stage: "Steady delivery",
+    status: "Healthy",
     statusTone: "success",
-    health: "Healthy",
-    healthTone: "success",
-    dueLabel: "Crew booked",
-    budget: "$41,000",
-    spent: "$24,100",
-    reserved: "$9,600",
-    progress: 58,
+    budget: "$30,000",
+    spent: "$19,500",
+    reserved: "$10,500",
+    progress: 65,
+    dueLabel: "On track",
     cashNeeded: "$0",
-    nextMilestone: "Concrete sensors install Monday",
-    owner: "Mika",
-    verifiedDays: 19,
-    updatedAt: "Updated 2 hours ago",
+    nextMilestone: "Weekly delivery review",
+    owner: "Amara",
+    verifiedDays: 18,
+    updatedAt: "Updated 1 hour ago",
+    insight: "On track this week.",
+    stateSignal: "Stable this week",
     summary:
-      "Ops and payments are aligned, giving this project enough room to complete the next install cycle without intervention.",
+      "Palm Estate has enough room in the budget and no immediate cash pressure. Delivery is tracking well for the current week.",
+    remaining: "$10,500",
+    financialImpact: "There is no immediate funding gap this week. Current commitments remain covered.",
     zilaSays:
-      "No urgent action needed here. Keep the Monday install crew confirmed and use this project as your stable margin anchor this week.",
+      "Keep Palm Estate steady and avoid pulling capital away unless another project becomes urgent.",
+    zilaSuggestionShort: "Keep capital in place and review labour spend",
+    nextMoveTitle: "Next move",
+    nextMoveSummary: "Review labour spend to keep Palm Estate comfortably on track",
+    ifNoAction: "Costs may drift next week",
+    ifActionTaken: "Runway stays healthy",
+    primaryActionLabel: "Review spend",
+    secondaryActionLabel: "Review options",
+    recentUpdates: [
+      { label: "Weekly work on track", tone: "success" },
+      { label: "No supplier issues", tone: "success" },
+      { label: "Cash position stable", tone: "success" },
+    ],
+    suggestedActions: ["Review labour spend", "Keep budget steady"],
+    lastVerifiedAction: "Client update sent · Today · Verified",
     tasks: [
-      { title: "Reconfirm Monday crew", due: "Tomorrow", status: "Scheduled" },
-      { title: "Approve sensor shipment", due: "Monday", status: "Ready now" },
-      { title: "Review stage invoice", due: "Tuesday", status: "Upcoming" },
+      { title: "Send weekly client update", due: "Today", status: "Ready now" },
+      { title: "Review labour spend", due: "Tomorrow", status: "Scheduled" },
+      { title: "Confirm next delivery block", due: "Friday", status: "Upcoming" },
     ],
     timeline: [
-      { label: "This week", detail: "Crew allocation and install staging" },
-      { label: "Next", detail: "Commissioning and final QA" },
-      { label: "Opportunity", detail: "Invoice earlier once QA is locked" },
+      { label: "This week", detail: "Maintain normal delivery cadence and monitor spend" },
+      { label: "Next", detail: "Lock the next work package" },
+      { label: "Focus", detail: "Protect margin while pace stays healthy" },
     ],
   },
   {
-    slug: "solace-studio",
-    name: "Solace Studio",
-    client: "Solace Health",
-    location: "Subiaco",
-    category: "Clinic refresh",
-    stage: "Wrap-up",
-    status: "Client review",
-    statusTone: "info",
-    health: "Stable",
-    healthTone: "info",
-    dueLabel: "Sign-off pending",
-    budget: "$18,600",
-    spent: "$15,440",
-    reserved: "$1,940",
-    progress: 89,
-    cashNeeded: "$0",
-    nextMilestone: "Final walk-through Tuesday",
-    owner: "Priya",
-    verifiedDays: 11,
-    updatedAt: "Updated yesterday",
+    id: "buildops-site-a",
+    name: "BuildOps Site A",
+    client: "BuildOps Site A",
+    location: "North Yard",
+    category: "Project",
+    stage: "Payment check",
+    status: "Due soon",
+    statusTone: "warning",
+    budget: "$14,000",
+    spent: "$13,200",
+    reserved: "$2,800",
+    progress: 94,
+    dueLabel: "Payment due next",
+    cashNeeded: "$800",
+    nextMilestone: "Clear payment before balance release",
+    owner: "Amara",
+    verifiedDays: 9,
+    updatedAt: "Updated 44 mins ago",
+    insight: "A payment needs to clear before the remaining balance is available, so a quick check now keeps this moving.",
+    stateSignal: "Payment due next. A quick check keeps this moving.",
     summary:
-      "The delivery work is essentially complete. Final sign-off and invoice timing now matter more than operational effort.",
+      "BuildOps Site A needs a payment confirmed before the remaining balance becomes available, but the next step is clear and manageable.",
+    remaining: "$800",
+    financialImpact: "This stays tight until the due payment clears and the remaining balance becomes available.",
     zilaSays:
-      "Prep the sign-off pack now so you can invoice within hours of the walk-through rather than losing another week to admin lag.",
+      "Confirm the due payment first and BuildOps Site A should be ready to use the remaining balance with more confidence.",
+    zilaSuggestionShort: "Confirm payment now and the balance can clear cleanly",
+    nextMoveTitle: "Next move",
+    nextMoveSummary: "Confirm the payment now so the remaining balance can clear",
+    ifNoAction: "Close-out may slip",
+    ifActionTaken: "Balance clears cleanly",
+    primaryActionLabel: "Move funds",
+    secondaryActionLabel: "Use Safety Net",
+    canUseSafetyNet: true,
+    showSafetyNetAction: false,
+    safetyNetShortfallText: "You're short $800",
+    safetyNetAmount: "$800",
+    safetyNetRemaining: "$2,000",
+    safetyNetDestination: "BuildOps Site A",
+    recentUpdates: [
+      { label: "Payment due before release", tone: "warning" },
+      { label: "Balance release still pending", tone: "warning" },
+      { label: "Next step is clearly defined", tone: "info" },
+    ],
+    suggestedActions: ["Schedule payment", "Reconfirm release date"],
+    lastVerifiedAction: "Cash board updated · Today · Verified",
     tasks: [
-      { title: "Compile defect photos", due: "Today", status: "In progress" },
-      { title: "Prepare final invoice", due: "Tuesday", status: "Ready now" },
-      { title: "Book walk-through", due: "Tuesday", status: "Confirmed" },
+      { title: "Schedule due payment", due: "Today", status: "Ready now" },
+      { title: "Confirm balance release timing", due: "Tomorrow", status: "Waiting reply" },
+      { title: "Update cash board", due: "Tomorrow", status: "Ready now" },
     ],
     timeline: [
-      { label: "This week", detail: "Defect sweep and walk-through pack" },
-      { label: "Next", detail: "Invoice and close-out archive" },
-      { label: "Focus", detail: "Speed up admin after sign-off" },
+      { label: "Now", detail: "Pay the outstanding amount before the balance clears" },
+      { label: "Next", detail: "Release remaining funds into operating cash" },
+      { label: "Focus", detail: "Keep the close-out sequence moving with a quick confirmation" },
+    ],
+  },
+  {
+    id: "north-block",
+    name: "North Block",
+    client: "North Block",
+    location: "Subiaco",
+    category: "Project",
+    stage: "Comfortable runway",
+    status: "Healthy",
+    statusTone: "success",
+    budget: "$11,500",
+    spent: "$7,100",
+    reserved: "$4,400",
+    progress: 61,
+    dueLabel: "Enough runway",
+    cashNeeded: "$0",
+    nextMilestone: "Current commitments covered",
+    owner: "Amara",
+    verifiedDays: 15,
+    updatedAt: "Updated yesterday",
+    insight: "Enough runway for current commitments.",
+    stateSignal: "Comfortable runway",
+    summary:
+      "North Block has sufficient runway to handle the current round of commitments without immediate intervention.",
+    remaining: "$4,400",
+    financialImpact: "Current commitments are covered. No urgent funding move is needed right now.",
+    zilaSays:
+      "North Block is in a stable place, so only routine monitoring is needed for now.",
+    zilaSuggestionShort: "Maintain routine oversight this week",
+    nextMoveTitle: "Next move",
+    nextMoveSummary: "Refresh the forecast to keep North Block comfortably ahead",
+    ifNoAction: "Visibility softens next week",
+    ifActionTaken: "Runway stays clear",
+    primaryActionLabel: "Refresh forecast",
+    secondaryActionLabel: "Review options",
+    recentUpdates: [
+      { label: "Runway remains healthy", tone: "success" },
+      { label: "Current commitments covered", tone: "success" },
+      { label: "Routine review only", tone: "info" },
+    ],
+    suggestedActions: ["Refresh forecast", "Monitor supplier balances"],
+    lastVerifiedAction: "Forecast refreshed · Yesterday · Verified",
+    tasks: [
+      { title: "Review current commitments", due: "This week", status: "On track" },
+      { title: "Check supplier balances", due: "Friday", status: "Upcoming" },
+      { title: "Refresh forecast", due: "Next week", status: "Planned" },
+    ],
+    timeline: [
+      { label: "This week", detail: "Maintain routine oversight" },
+      { label: "Next", detail: "Refresh the forecast after current commitments post" },
+      { label: "Focus", detail: "Preserve runway and avoid unnecessary transfers" },
     ],
   },
 ];
@@ -153,18 +289,10 @@ export function getProjects() {
   return projects;
 }
 
-export function getProjectBySlug(slug: string) {
-  return projects.find((project) => project.slug === slug);
+export function getProjectById(id: string) {
+  return projects.find((project) => project.id === id);
 }
 
-export function getProjectSummary() {
-  const activeProjects = projects.length;
-  const watchProjects = projects.filter((project) => project.health === "Watch").length;
-
-  return {
-    activeProjects,
-    watchProjects,
-    totalBudget: "$88k",
-    receivables: "$19k",
-  };
+export function getDefaultProject() {
+  return getProjectById("harbour-road") ?? projects[0];
 }

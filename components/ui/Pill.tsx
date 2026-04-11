@@ -9,16 +9,16 @@ interface PillProps {
 }
 
 const toneClasses: Record<ProjectTone, string> = {
-  neutral: "bg-[#F3F4F6] text-[#4B5563]",
-  warning: "bg-[#FEF3C7] text-[#92400E]",
-  success: "bg-[#D1FAE5] text-[#065F46]",
-  info: "bg-[#DBEAFE] text-[#1D4ED8]",
+  neutral: "border border-[rgba(15,23,42,0.08)] bg-[#F4F1EB] text-[#121417]",
+  warning: "border border-[rgba(146,100,41,0.10)] bg-[#F3ECE2] text-[#121417]",
+  success: "border border-[rgba(46,94,74,0.10)] bg-[#EAF0EB] text-[#121417]",
+  info: "border border-[rgba(90,99,126,0.10)] bg-[#ECEFF5] text-[#121417]",
 };
 
 export function Pill({ children, tone = "neutral", className = "" }: PillProps) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold ${toneClasses[tone]} ${className}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-medium tracking-[0.01em] ${toneClasses[tone]} ${className}`}
     >
       {children}
     </span>

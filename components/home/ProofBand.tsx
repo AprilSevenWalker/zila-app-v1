@@ -1,11 +1,12 @@
 import React from "react";
+import { ShieldCheck } from "lucide-react";
 
 export const ProofBand: React.FC = () => {
   return (
     <div className="bg-white border border-[rgba(18,20,23,0.08)] rounded-[16px] p-4 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-4 flex-1">
-        <div className="w-11 h-11 rounded-[10px] bg-[#0F172A] flex items-center justify-center text-[18px] flex-shrink-0">
-          🛡️
+        <div className="w-11 h-11 rounded-[10px] bg-[#0F172A] flex items-center justify-center text-[18px] flex-shrink-0 text-white">
+          <ShieldCheck className="h-[18px] w-[18px]" strokeWidth={2} />
         </div>
         <div>
           <h4 className="text-[14px] font-semibold text-[#121417]">Proof of Operations</h4>

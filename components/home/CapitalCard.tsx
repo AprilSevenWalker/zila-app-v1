@@ -1,4 +1,7 @@
 import React from "react";
+import { BarChart3, TrendingUp } from "lucide-react";
+import { IconTile } from "@/components/ui/IconTile";
+import { SafetyNetDisplay } from "@/components/ui/SafetyNetDisplay";
 
 export const CapitalCard: React.FC = () => {
   return (
@@ -13,12 +16,16 @@ export const CapitalCard: React.FC = () => {
             <p className="text-[11px] text-[#94A3B8] mb-2">Total capital</p>
             <h2 className="text-[40px] font-semibold leading-tight text-white">$84,320</h2>
             <div className="flex items-center gap-1 mt-3">
-              <span className="text-[12px] text-[#22D3EE]">📈</span>
+              <IconTile glow="cyan" className="h-4 w-4 rounded-full border-white/10 bg-[#182235] text-[#DCEBEE] shadow-none">
+                <TrendingUp className="h-[10px] w-[10px] text-[#67E8F9] capital-trend-pulse" strokeWidth={2.5} />
+              </IconTile>
               <span className="text-[12px] text-[#22D3EE] font-medium">+$2,140 this week</span>
             </div>
           </div>
           <div className="bg-[#1E293B] rounded-[16px] p-3 flex flex-col items-center gap-1 shadow-md backdrop-blur-sm">
-            <span className="text-[16px]">📊</span>
+            <IconTile className="h-6 w-6 rounded-full border-white/10 bg-[#182235] text-[#E2E8F0] shadow-none">
+              <BarChart3 className="h-[11px] w-[11px] text-[#BFD1F8] capital-chart-shimmer" strokeWidth={2.35} />
+            </IconTile>
             <span className="text-[#6366F1] font-semibold text-[13px]">+8.2%</span>
             <span className="text-[9px] text-[#94A3B8]">vs last week</span>
           </div>
@@ -34,7 +41,7 @@ export const CapitalCard: React.FC = () => {
           <div className="flex justify-between text-[9px] text-[#94A3B8] gap-2">
             <span>Cash 41k</span>
             <span>Receivables 19k</span>
-            <span>Reserved 24k</span>
+            <span>Safety Net</span>
           </div>
         </div>
 
@@ -48,20 +55,17 @@ export const CapitalCard: React.FC = () => {
             <p className="text-[9px] text-[#94A3B8] mb-2">Receivables</p>
             <p className="text-[16px] font-semibold text-white">$18,900</p>
           </div>
-          <div className="bg-[#1E293B]/60 backdrop-blur-sm rounded-[14px] p-3 text-center border border-white/5">
-            <p className="text-[9px] text-[#94A3B8] mb-2">Reserved</p>
-            <p className="text-[16px] font-semibold text-white">$24,220</p>
-            <div className="flex items-center justify-center gap-1 mt-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22D3EE]"></span>
-              <span className="text-[8px] text-[#22D3EE]">live</span>
-            </div>
-          </div>
         </div>
+
+        <SafetyNetDisplay
+          amount="$24,220"
+          dark
+          className="mt-3"
+          description="Keeps the business steady if revenue dips or costs rise"
+        />
       </div>
     </div>
   );
 };
 
 export default CapitalCard;
-
-
