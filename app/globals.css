@@ -246,3 +246,51 @@ body {
 .welcome-signal-dot-slow {
   animation: welcome-signal-dot 12.8s ease-in-out infinite;
 }
+
+@keyframes welcome-logo-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.98;
+  }
+  50% {
+    transform: translate3d(0, -4px, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-orbit {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(8px, -6px, 0) scale(1.03);
+    opacity: 0.82;
+  }
+}
+
+@keyframes welcome-orbit-slow {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate3d(-6px, 8px, 0) scale(1.04);
+    opacity: 0.68;
+  }
+}
+
+.welcome-logo-float {
+  animation: welcome-logo-float 8s ease-in-out infinite;
+}
+
+.welcome-orbit {
+  animation: welcome-orbit 14s ease-in-out infinite;
+}
+
+.welcome-orbit-slow {
+  animation: welcome-orbit-slow 18s ease-in-out infinite;
+}
