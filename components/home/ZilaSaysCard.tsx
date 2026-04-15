@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { IconTile } from "@/components/ui/IconTile";
 
 interface ZilaSaysCardProps {
@@ -6,7 +8,7 @@ interface ZilaSaysCardProps {
 }
 
 export function ZilaSaysCard({
-  message = "Harbour Road needs $4,300 by Thursday. Move from your wallet now to stay on track.",
+  message = "Project Horizon needs $4,300 by Thursday. Move from your wallet now to stay on track.",
   ctaLabel = "Sort this now →",
 }: ZilaSaysCardProps) {
   return (
@@ -23,12 +25,12 @@ export function ZilaSaysCard({
             <p className="text-[12px] font-semibold text-[#22D3EE]">Zila says</p>
           </div>
           <p className="mb-3 text-[13px] leading-relaxed text-white">{message}</p>
-          <a
-            href="#"
+          <Link
+            href="/projects/harbour-road"
             className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#22D3EE] transition hover:opacity-80"
           >
             {ctaLabel}
-          </a>
+          </Link>
         </div>
       </div>
     </div>

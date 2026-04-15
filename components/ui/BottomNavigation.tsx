@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { CreditCard, FolderKanban, Home, ShieldCheck, UserRound } from "lucide-react";
+import { CreditCard, FolderKanban, Home, MessageSquareText, ShieldCheck, UserRound } from "lucide-react";
 import { IconTile } from "@/components/ui/IconTile";
 
 interface NavItem {
@@ -15,6 +15,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: "Home", icon: Home, href: "/home" },
   { name: "Projects", icon: FolderKanban, href: "/projects" },
+  { name: "Ask", icon: MessageSquareText, href: "/ask" },
   { name: "Payments", icon: CreditCard, href: "/payments" },
   { name: "Proof", icon: ShieldCheck, href: "/proof" },
   { name: "Me", icon: UserRound, href: "/me" },

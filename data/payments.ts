@@ -2,6 +2,48 @@ import type { ProjectTone } from "@/data/projects";
 
 export type PaymentSection = "due-this-week" | "upcoming";
 
+export interface CashflowRail {
+  id: string;
+  label: string;
+  amount: string;
+}
+
+export interface CashflowAllocation {
+  allocated: string;
+  freeToUse: string;
+  projectBreakdown: CashflowProjectAllocation[];
+}
+
+export interface CashflowProjectAllocation {
+  id: string;
+  project: string;
+  amount: string;
+}
+
+export interface CashflowOverview {
+  totalAvailable: string;
+  totalSubtext: string;
+  rails: CashflowRail[];
+  allocation: CashflowAllocation;
+  commitmentsThisWeek: string;
+  recentActivity: CashflowActivity[];
+  needsAttention?: CashflowAttentionItem;
+}
+
+export interface CashflowActivity {
+  id: string;
+  type: string;
+  amount: string;
+  project: string;
+  status: string;
+  href: string;
+}
+
+export interface CashflowAttentionItem {
+  project: string;
+  detail: string;
+}
+
 export interface Payment {
   id: string;
   name: string;
@@ -19,8 +61,8 @@ export interface Payment {
 export const payments: Payment[] = [
   {
     id: "harbour-road-supplier",
-    name: "Harbour Road Supplier",
-    project: "Harbour Road",
+    name: "Project Horizon Supplier",
+    project: "Project Horizon",
     dueDate: "Friday",
     amount: "$7,500",
     source: "Main operating wallet",
@@ -32,8 +74,8 @@ export const payments: Payment[] = [
   },
   {
     id: "palm-estate-contractor",
-    name: "Palm Estate Contractor",
-    project: "Palm Estate",
+    name: "Atlas Project Contractor",
+    project: "Atlas Project",
     dueDate: "Monday",
     amount: "$3,200",
     source: "Client drawdown rail",
@@ -45,8 +87,8 @@ export const payments: Payment[] = [
   },
   {
     id: "buildops-settlement",
-    name: "BuildOps Settlement",
-    project: "BuildOps Site A",
+    name: "Northstar Project Settlement",
+    project: "Northstar Project",
     dueDate: "Today",
     amount: "$2,000",
     source: "Settlement hold rail",
@@ -58,8 +100,53 @@ export const payments: Payment[] = [
   },
 ];
 
+export const cashflowOverview: CashflowOverview = {
+  totalAvailable: "$42,300",
+  totalSubtext: "Across all accounts and rails",
+  rails: [
+    { id: "bank", label: "Bank", amount: "$18,000" },
+    { id: "mobile-money", label: "Mobile money", amount: "$6,300" },
+    { id: "stablecoin", label: "Stablecoin", amount: "$18,000" },
+  ],
+  allocation: {
+    allocated: "$30,000",
+    freeToUse: "$12,300",
+    projectBreakdown: [
+      { id: "project-horizon", project: "Project Horizon", amount: "$18,000" },
+      { id: "atlas-project", project: "Atlas Project", amount: "$12,000" },
+    ],
+  },
+  commitmentsThisWeek: "$9,500",
+  recentActivity: [
+    {
+      id: "invoice-project-horizon",
+      type: "Invoice",
+      amount: "$4,300",
+      project: "Project Horizon",
+      status: "Due Friday",
+      href: "/projects/harbour-road",
+    },
+    {
+      id: "payment-project-horizon",
+      type: "Payment",
+      amount: "$2,000",
+      project: "Project Horizon",
+      status: "Recorded",
+      href: "/projects/harbour-road",
+    },
+  ],
+  needsAttention: {
+    project: "Project Horizon",
+    detail: "Short $4,300 by Friday",
+  },
+};
+
 export function getPayments() {
   return payments;
+}
+
+export function getCashflowOverview() {
+  return cashflowOverview;
 }
 
 export function getPaymentsBySection(section: PaymentSection) {

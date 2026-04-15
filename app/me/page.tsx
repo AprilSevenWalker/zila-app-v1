@@ -14,10 +14,21 @@ export default function Me() {
           <h1 className="text-[32px] font-semibold leading-tight text-[#121417]">Founder settings, same premium frame</h1>
         </div>
         <SurfaceCard tone="white">
-          <p className="text-[12px] font-semibold text-[#6366F1]">Phase 1 shell</p>
-          <p className="mt-3 text-[14px] leading-relaxed text-[#121417]">
-            This tab now matches the Home and Projects design language, which keeps the MVP feeling complete even before profile details are added.
-          </p>
+          <p className="text-[12px] font-semibold text-[#6366F1]">Preferences</p>
+          <div className="mt-4 space-y-3">
+            <div className="rounded-[16px] bg-[#F8F6F1] p-4">
+              <p className="text-[11px] text-[#6B7280]">Primary currency</p>
+              <p className="mt-1 text-[16px] font-semibold text-[#121417]">USD</p>
+            </div>
+            <div className="rounded-[16px] bg-[#F8F6F1] p-4">
+              <p className="text-[11px] text-[#6B7280]">Secondary currency</p>
+              <p className="mt-1 text-[16px] font-semibold text-[#121417]">KES</p>
+            </div>
+            <div className="rounded-[16px] bg-[#F8F6F1] p-4">
+              <p className="text-[11px] text-[#6B7280]">Language</p>
+              <p className="mt-1 text-[16px] font-semibold text-[#121417]">English</p>
+            </div>
+          </div>
         </SurfaceCard>
       </div>
     </AppShell>

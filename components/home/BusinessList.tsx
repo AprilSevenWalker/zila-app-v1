@@ -54,6 +54,7 @@ export function BusinessList() {
           subtitle="BuildOps · 13 days, verified"
           badge="Verified"
           badgeColor="border border-[rgba(92,130,110,0.12)] bg-[#E8F0EA] text-[#466253]"
+          href="/proof"
         />
       </div>
     </div>

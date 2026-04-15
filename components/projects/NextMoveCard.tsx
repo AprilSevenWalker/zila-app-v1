@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Landmark, ShieldCheck, TriangleAlert } from "lucide-react";
 
@@ -95,18 +96,33 @@ export function NextMoveCard({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition ${
-            dark
-              ? "bg-white text-[#121417] hover:bg-[#F4F6FB]"
-              : "bg-[#121417] text-white hover:bg-[#20242B]"
-          }`}
-          data-action-id={primaryActionLabel.toLowerCase().replace(/\s+/g, "-")}
-        >
-          {primaryActionLabel}
-          <ArrowRight className="h-[12px] w-[12px]" strokeWidth={2} />
-        </button>
+        {primaryActionLabel === "Move funds" ? (
+          <Link
+            href="/move-funds"
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition ${
+              dark
+                ? "bg-white text-[#121417] hover:bg-[#F4F6FB]"
+                : "bg-[#121417] text-white hover:bg-[#20242B]"
+            }`}
+            data-action-id={primaryActionLabel.toLowerCase().replace(/\s+/g, "-")}
+          >
+            {primaryActionLabel}
+            <ArrowRight className="h-[12px] w-[12px]" strokeWidth={2} />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition ${
+              dark
+                ? "bg-white text-[#121417] hover:bg-[#F4F6FB]"
+                : "bg-[#121417] text-white hover:bg-[#20242B]"
+            }`}
+            data-action-id={primaryActionLabel.toLowerCase().replace(/\s+/g, "-")}
+          >
+            {primaryActionLabel}
+            <ArrowRight className="h-[12px] w-[12px]" strokeWidth={2} />
+          </button>
+        )}
         {showSecondaryAction && !canUseSafetyNet ? (
           <button
             type="button"

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 
+import { MockInvoiceUpload } from "@/components/documents/MockInvoiceUpload";
 import { NextMoveCard } from "@/components/projects/NextMoveCard";
 import { SafetyNetActionCard } from "@/components/projects/SafetyNetActionCard";
 import { getSignalVariant, ZilaSignal } from "@/components/projects/ZilaSignal";
 import { AppShell } from "@/components/ui/AppShell";
+import { CurrencyAmount } from "@/components/ui/CurrencyAmount";
 import { IconTile } from "@/components/ui/IconTile";
 import { Pill } from "@/components/ui/Pill";
 import { SafetyNetDisplay } from "@/components/ui/SafetyNetDisplay";
@@ -57,15 +59,33 @@ export default async function ProjectDetailPage({
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-[16px] bg-[#F8F6F1] p-4">
               <p className="text-[10px] text-[#6B7280]">Budget</p>
-              <p className="mt-1 text-[18px] font-semibold text-[#121417]">{project.budget}</p>
+              <div className="mt-1">
+                <CurrencyAmount
+                  amount={project.budget}
+                  primaryClassName="text-[18px] font-semibold text-[#121417]"
+                  secondaryClassName="mt-0.5 text-[11px] font-medium text-[#6B7280]"
+                />
+              </div>
             </div>
             <div className="rounded-[16px] bg-[#F8F6F1] p-4">
               <p className="text-[10px] text-[#6B7280]">Spent</p>
-              <p className="mt-1 text-[18px] font-semibold text-[#121417]">{project.spent}</p>
+              <div className="mt-1">
+                <CurrencyAmount
+                  amount={project.spent}
+                  primaryClassName="text-[18px] font-semibold text-[#121417]"
+                  secondaryClassName="mt-0.5 text-[11px] font-medium text-[#6B7280]"
+                />
+              </div>
             </div>
             <div className="rounded-[16px] bg-[#F8F6F1] p-4">
               <p className="text-[10px] text-[#6B7280]">Remaining</p>
-              <p className="mt-1 text-[18px] font-semibold text-[#121417]">{project.remaining}</p>
+              <div className="mt-1">
+                <CurrencyAmount
+                  amount={project.remaining}
+                  primaryClassName="text-[18px] font-semibold text-[#121417]"
+                  secondaryClassName="mt-0.5 text-[11px] font-medium text-[#6B7280]"
+                />
+              </div>
             </div>
           </div>
           <SafetyNetDisplay
@@ -73,6 +93,21 @@ export default async function ProjectDetailPage({
             className="mt-3"
             description="Available to keep this project steady if revenue dips or costs rise"
           />
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <Link
+              href="/ask"
+              className="inline-flex h-12 min-w-[148px] items-center justify-center rounded-full border border-[#121417]/10 bg-[#121417] px-5 py-2.5 text-[13px] font-semibold text-white shadow-[0_10px_24px_rgba(18,20,23,0.08)] transition hover:opacity-90"
+            >
+              Add update
+            </Link>
+            <MockInvoiceUpload
+              assignedProject={project.name}
+              buttonLabel="Upload document"
+              tone="light"
+              inlineInFlexRow
+              buttonClassName="min-w-[148px] justify-center px-5"
+            />
+          </div>
         </SurfaceCard>
 
         <SurfaceCard tone="dark" className="relative overflow-hidden rounded-[24px] p-6">
@@ -84,7 +119,13 @@ export default async function ProjectDetailPage({
                   <ZilaSignal variant={getSignalVariant(project.statusTone, project.id)} onDark />
                   <p className="text-[12px] font-semibold text-[#22D3EE]">Funding outlook</p>
                 </div>
-                <p className="mt-2 text-[24px] font-semibold leading-tight text-white">{project.cashNeeded}</p>
+                <div className="mt-2">
+                  <CurrencyAmount
+                    amount={project.cashNeeded}
+                    primaryClassName="text-[24px] font-semibold leading-tight text-white"
+                    secondaryClassName="mt-0.5 text-[11px] font-medium text-[#9AB0C8]"
+                  />
+                </div>
                 <p className="mt-1 text-[11px] text-[#94A3B8]">Estimated funding move</p>
               </div>
               <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2 text-right">

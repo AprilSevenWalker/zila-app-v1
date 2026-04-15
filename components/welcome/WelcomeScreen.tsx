@@ -70,14 +70,14 @@ export function WelcomeScreen() {
         <div className="mt-auto pt-2">
           <div className="space-y-3">
             <Link
-              href="/home"
+              href="/login"
               className="inline-flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/60 bg-white px-4 py-4 text-[14px] font-semibold text-[#121417] shadow-[0_18px_36px_rgba(255,255,255,0.14),0_0_18px_rgba(34,211,238,0.06),inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:bg-[#F7F7FB]"
             >
               <Mail className="h-[16px] w-[16px]" strokeWidth={2} />
               Continue with email
             </Link>
             <Link
-              href="/home"
+              href="/login"
               className="inline-flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.085),rgba(255,255,255,0.045))] px-4 py-4 text-[14px] font-semibold text-white shadow-[0_0_28px_rgba(99,102,241,0.10),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-sm transition hover:bg-white/10"
             >
               <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[#DDE7FF]">

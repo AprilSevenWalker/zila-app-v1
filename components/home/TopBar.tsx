@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Bell } from "lucide-react";
 
 interface TopBarProps {
@@ -18,10 +19,13 @@ export function TopBar({
     <div className="flex items-center justify-between border-b border-[rgba(18,20,23,0.08)] bg-white px-4 py-3 text-sm">
       <span className="text-[12px] font-semibold text-[#121417]">{time}</span>
       <span className="text-[12px] font-medium text-[#6B7280]">{dayLabel}</span>
-      <div className="flex items-center gap-1.5 rounded-full bg-[#6366F1] px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-[#6366F1]/30">
+      <Link
+        href="/proof"
+        className="flex items-center gap-1.5 rounded-full bg-[#6366F1] px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-[#6366F1]/30 transition hover:opacity-90"
+      >
         <span>{notificationIcon}</span>
         <span>{notificationLabel}</span>
-      </div>
+      </Link>
     </div>
   );
 }

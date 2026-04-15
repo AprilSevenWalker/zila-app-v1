@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { IconTile } from "@/components/ui/IconTile";
 
 interface InsightCardProps {
@@ -30,9 +32,9 @@ export function InsightCard({
       <p className="mb-4 text-[11px] text-[#6B7280]">{meta}</p>
 
       <div className="flex items-center justify-between border-t border-[rgba(18,20,23,0.08)] pt-4">
-        <a href="#" className="text-[12px] font-semibold text-[#6366F1] transition hover:opacity-80">
+        <Link href="/compare" className="text-[12px] font-semibold text-[#6366F1] transition hover:opacity-80">
           {ctaLabel}
-        </a>
+        </Link>
         <div className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-[#6366F1]"></span>
           <span className="h-2 w-2 rounded-full bg-[#E7E5E4]"></span>

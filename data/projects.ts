@@ -64,8 +64,8 @@ export interface Project {
 export const projects: Project[] = [
   {
     id: "harbour-road",
-    name: "Harbour Road",
-    client: "Harbour Road",
+    name: "Project Horizon",
+    client: "Project Horizon",
     location: "Fremantle",
     category: "Project",
     stage: "Cash watch",
@@ -84,14 +84,14 @@ export const projects: Project[] = [
     insight: "Costs increased this week. You are close to a shortfall by Friday, so a small adjustment will keep things steady.",
     stateSignal: "Close to a shortfall by Friday. A small adjustment keeps this on track.",
     summary:
-      "Costs climbed late in the week, but a small funding move before Friday should keep Harbour Road moving smoothly.",
+      "Costs climbed late in the week, but a small funding move before Friday should keep Project Horizon moving smoothly.",
     remaining: "$4,000",
     financialImpact: "You will be about $4,300 short by Friday unless funds are moved, and a small top-up now keeps delivery on track.",
     zilaSays:
-      "Move funds into Harbour Road before Friday and the project should absorb this week's cost spike without interrupting delivery.",
+      "Move funds into Project Horizon before Friday and the project should absorb this week's cost spike without interrupting delivery.",
     zilaSuggestionShort: "Move $4.3k now and you stay fully on track",
     nextMoveTitle: "Next move",
-    nextMoveSummary: "Move $4,300 now to keep Harbour Road on track",
+    nextMoveSummary: "Move $4,300 now to keep Project Horizon on track",
     ifNoAction: "Payment will fail by Friday",
     ifActionTaken: "Project remains stable",
     primaryActionLabel: "Move funds",
@@ -101,7 +101,7 @@ export const projects: Project[] = [
     safetyNetShortfallText: "You're short $4,300",
     safetyNetAmount: "$2,000",
     safetyNetRemaining: "$4,200",
-    safetyNetDestination: "Harbour Road",
+    safetyNetDestination: "Project Horizon",
     recentUpdates: [
       { label: "Cost increase +$4,000", tone: "warning" },
       { label: "Supplier timing shifted", tone: "warning" },
@@ -111,7 +111,7 @@ export const projects: Project[] = [
     suggestedActions: ["Move funds", "Adjust budget"],
     lastVerifiedAction: "Funds moved · Today · Verified",
     tasks: [
-      { title: "Move funds to Harbour Road", due: "Today", status: "Ready now" },
+      { title: "Move funds to Project Horizon", due: "Today", status: "Ready now" },
       { title: "Review supplier overrun", due: "Thursday", status: "Needs review" },
       { title: "Confirm Friday payment", due: "Friday", status: "Pending" },
     ],
@@ -123,8 +123,8 @@ export const projects: Project[] = [
   },
   {
     id: "palm-estate",
-    name: "Palm Estate",
-    client: "Palm Estate",
+    name: "Atlas Project",
+    client: "Atlas Project",
     location: "Perth Metro",
     category: "Project",
     stage: "Steady delivery",
@@ -143,14 +143,14 @@ export const projects: Project[] = [
     insight: "On track this week.",
     stateSignal: "Stable this week",
     summary:
-      "Palm Estate has enough room in the budget and no immediate cash pressure. Delivery is tracking well for the current week.",
+      "Atlas Project has enough room in the budget and no immediate cash pressure. Delivery is tracking well for the current week.",
     remaining: "$10,500",
     financialImpact: "There is no immediate funding gap this week. Current commitments remain covered.",
     zilaSays:
-      "Keep Palm Estate steady and avoid pulling capital away unless another project becomes urgent.",
+      "Keep Atlas Project steady and avoid pulling capital away unless another project becomes urgent.",
     zilaSuggestionShort: "Keep capital in place and review labour spend",
     nextMoveTitle: "Next move",
-    nextMoveSummary: "Review labour spend to keep Palm Estate comfortably on track",
+    nextMoveSummary: "Review labour spend to keep Atlas Project comfortably on track",
     ifNoAction: "Costs may drift next week",
     ifActionTaken: "Runway stays healthy",
     primaryActionLabel: "Review spend",
@@ -175,8 +175,8 @@ export const projects: Project[] = [
   },
   {
     id: "buildops-site-a",
-    name: "BuildOps Site A",
-    client: "BuildOps Site A",
+    name: "Northstar Project",
+    client: "Northstar Project",
     location: "North Yard",
     category: "Project",
     stage: "Payment check",
@@ -195,11 +195,11 @@ export const projects: Project[] = [
     insight: "A payment needs to clear before the remaining balance is available, so a quick check now keeps this moving.",
     stateSignal: "Payment due next. A quick check keeps this moving.",
     summary:
-      "BuildOps Site A needs a payment confirmed before the remaining balance becomes available, but the next step is clear and manageable.",
+      "Northstar Project needs a payment confirmed before the remaining balance becomes available, but the next step is clear and manageable.",
     remaining: "$800",
     financialImpact: "This stays tight until the due payment clears and the remaining balance becomes available.",
     zilaSays:
-      "Confirm the due payment first and BuildOps Site A should be ready to use the remaining balance with more confidence.",
+      "Confirm the due payment first and Northstar Project should be ready to use the remaining balance with more confidence.",
     zilaSuggestionShort: "Confirm payment now and the balance can clear cleanly",
     nextMoveTitle: "Next move",
     nextMoveSummary: "Confirm the payment now so the remaining balance can clear",
@@ -212,7 +212,7 @@ export const projects: Project[] = [
     safetyNetShortfallText: "You're short $800",
     safetyNetAmount: "$800",
     safetyNetRemaining: "$2,000",
-    safetyNetDestination: "BuildOps Site A",
+    safetyNetDestination: "Northstar Project",
     recentUpdates: [
       { label: "Payment due before release", tone: "warning" },
       { label: "Balance release still pending", tone: "warning" },
@@ -233,8 +233,8 @@ export const projects: Project[] = [
   },
   {
     id: "north-block",
-    name: "North Block",
-    client: "North Block",
+    name: "Helix Project",
+    client: "Helix Project",
     location: "Subiaco",
     category: "Project",
     stage: "Comfortable runway",
@@ -253,14 +253,14 @@ export const projects: Project[] = [
     insight: "Enough runway for current commitments.",
     stateSignal: "Comfortable runway",
     summary:
-      "North Block has sufficient runway to handle the current round of commitments without immediate intervention.",
+      "Helix Project has sufficient runway to handle the current round of commitments without immediate intervention.",
     remaining: "$4,400",
     financialImpact: "Current commitments are covered. No urgent funding move is needed right now.",
     zilaSays:
-      "North Block is in a stable place, so only routine monitoring is needed for now.",
+      "Helix Project is in a stable place, so only routine monitoring is needed for now.",
     zilaSuggestionShort: "Maintain routine oversight this week",
     nextMoveTitle: "Next move",
-    nextMoveSummary: "Refresh the forecast to keep North Block comfortably ahead",
+    nextMoveSummary: "Refresh the forecast to keep Helix Project comfortably ahead",
     ifNoAction: "Visibility softens next week",
     ifActionTaken: "Runway stays clear",
     primaryActionLabel: "Refresh forecast",

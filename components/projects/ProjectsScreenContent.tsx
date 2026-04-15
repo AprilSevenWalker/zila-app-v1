@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CircleDollarSign, ReceiptText, Sparkles } from "lucide-react";
 
+import { QuickUpdateMenu } from "@/components/actions/QuickUpdateMenu";
 import type { Project } from "@/data/projects";
 import { NextMoveCard } from "@/components/projects/NextMoveCard";
 import { SafetyNetActionCard } from "@/components/projects/SafetyNetActionCard";
@@ -50,8 +51,13 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
   return (
     <div className="space-y-6">
       <div className="mt-2">
-        <p className="mb-1 text-[12px] font-semibold text-[#6B7280]">Project portfolio</p>
-        <h1 className="text-[32px] font-semibold leading-tight text-[#121417]">Your Projects</h1>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="mb-1 text-[12px] font-semibold text-[#6B7280]">Project portfolio</p>
+            <h1 className="text-[32px] font-semibold leading-tight text-[#121417]">Your Projects</h1>
+          </div>
+          <QuickUpdateMenu align="right" />
+        </div>
       </div>
 
       <div className="relative overflow-hidden rounded-[28px] border border-white/30 bg-gradient-to-br from-[#24295A] via-[#2B2D71] to-[#1E586C] p-6 shadow-[0_18px_38px_rgba(15,23,42,0.13)]">
@@ -65,7 +71,7 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
             <p className="text-[15px] font-semibold text-[#F5F4FF]">Zila Insight</p>
           </div>
           <p className="max-w-[310px] text-[18px] leading-[1.55] text-[#FBFBFF]">
-            Harbour Road is about 6 days from a funding gap. A small move now keeps the week on track.
+            Project Horizon is about 6 days from a funding gap. A small move now keeps the week on track.
           </p>
         </div>
       </div>
