@@ -25,7 +25,7 @@ export function BottomNavigation() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-20">
+    <nav className="fixed bottom-0 left-0 right-0 z-20 md:hidden">
       <div className="mx-auto max-w-[390px] px-4 pb-4">
         <div className="flex items-end justify-around rounded-[24px] border border-[rgba(18,20,23,0.08)] bg-white/95 px-2 pt-2 shadow-[0_20px_50px_rgba(15,23,42,0.18)] backdrop-blur-sm">
           {navItems.map((item) => {

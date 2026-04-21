@@ -33,11 +33,7 @@ export default function RootLayout({
       lang="en"
       className={`${plusJakartaSans.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans bg-color-bg">
-        <div className="flex justify-center">
-          {children}
-        </div>
-      </body>
+      <body className="min-h-full bg-color-bg font-sans">{children}</body>
     </html>
   );
 }
