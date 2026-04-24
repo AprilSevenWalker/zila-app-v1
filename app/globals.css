@@ -38,6 +38,190 @@ body {
   font-family: var(--font-plus-jakarta-sans), Arial, Helvetica, sans-serif;
 }
 
+@keyframes zila-gradient-drift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes zila-hero-breathing-gradient {
+  0%,
+  100% {
+    background-position: 48% 50%, 50% 50%, 50% 50%;
+  }
+  50% {
+    background-position: 54% 48%, 47% 52%, 52% 50%;
+  }
+}
+
+.zila-page-grain::before,
+.zila-surface-grain::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(15, 23, 42, 0.22) 0 0.6px, transparent 0.8px),
+    radial-gradient(circle at 70% 60%, rgba(255, 255, 255, 0.32) 0 0.55px, transparent 0.75px);
+  background-size: 18px 18px, 23px 23px;
+  background-blend-mode: soft-light;
+  mix-blend-mode: soft-light;
+}
+
+.zila-page-grain {
+  position: relative;
+}
+
+.zila-page-grain::before {
+  position: fixed;
+  opacity: 0.025;
+  z-index: 0;
+}
+
+.zila-page-grain > * {
+  position: relative;
+  z-index: 1;
+}
+
+.zila-surface-grain::after {
+  opacity: 0.035;
+  z-index: 1;
+}
+
+.zila-animated-gradient {
+  background-size: 160% 160%;
+  animation: zila-gradient-drift 12s ease-in-out infinite;
+}
+
+.zila-animated-gradient-slow {
+  background-size: 180% 180%;
+  animation: zila-gradient-drift 15s ease-in-out infinite;
+}
+
+.zila-hero-breathing-gradient {
+  background-size: 140% 140%, 120% 120%, 100% 100%;
+  animation: zila-hero-breathing-gradient 24s ease-in-out infinite;
+}
+
+.sidebar-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 20px 0 12px 20px;
+  margin-bottom: 0;
+  background: transparent;
+}
+
+.sidebar-logo-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.sidebar-logo {
+  width: 96px;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.profile-section {
+  margin-top: 4px;
+}
+
+.zila-card-hover {
+  transform: translateY(0);
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    filter 0.25s ease,
+    border-color 0.25s ease;
+  will-change: transform, filter;
+}
+
+.zila-card-hover:hover {
+  transform: translateY(-3px);
+  filter: brightness(1.02);
+  box-shadow:
+    0 26px 68px rgba(0, 0, 0, 0.17),
+    0 0 34px rgba(120, 100, 255, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.11);
+}
+
+.zila-card-hover:active {
+  transform: translateY(-2px);
+}
+
+.zila-button-hover {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    filter 0.25s ease;
+  will-change: transform, filter;
+}
+
+.zila-button-hover::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.32) 42%, transparent 68%);
+  opacity: 0;
+  transform: translateX(-34%);
+  transition:
+    opacity 0.25s ease,
+    transform 420ms ease;
+}
+
+.zila-button-hover:hover {
+  transform: translateY(-1px) scale(1.02);
+  filter: brightness(1.035);
+  box-shadow:
+    0 18px 38px rgba(99, 102, 241, 0.24),
+    0 0 28px rgba(120, 100, 255, 0.18);
+}
+
+.zila-button-hover:hover::before {
+  opacity: 1;
+  transform: translateX(34%);
+}
+
+.zila-button-hover:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.zila-button-hover:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.42);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zila-animated-gradient,
+  .zila-animated-gradient-slow,
+  .zila-hero-breathing-gradient,
+  .zila-card-hover,
+  .zila-button-hover,
+  .zila-button-hover::before {
+    animation: none;
+    transition: none;
+  }
+
+  .zila-card-hover:hover,
+  .zila-card-hover:active,
+  .zila-button-hover:hover,
+  .zila-button-hover:active {
+    transform: none;
+  }
+}
+
 @keyframes capital-signal-pulse {
   0%,
   100% {

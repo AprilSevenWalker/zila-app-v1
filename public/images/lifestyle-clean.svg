@@ -1,0 +1,46 @@
+<svg width="700" height="420" viewBox="0 0 700 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="room" x1="0" y1="0" x2="700" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17144D"/>
+      <stop offset="0.52" stop-color="#101235"/>
+      <stop offset="1" stop-color="#080A19"/>
+    </linearGradient>
+    <radialGradient id="lampGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(503 153) rotate(90) scale(166)">
+      <stop stop-color="#FFD58A" stop-opacity="0.84"/>
+      <stop offset="0.4" stop-color="#F59E0B" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#7C3AED" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blueGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(154 340) rotate(90) scale(184)">
+      <stop stop-color="#6366F1" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#6366F1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="desk" x1="107" y1="306" x2="642" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#31255C"/>
+      <stop offset="0.54" stop-color="#221B3F"/>
+      <stop offset="1" stop-color="#151225"/>
+    </linearGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+  </defs>
+  <rect width="700" height="420" fill="url(#room)"/>
+  <rect width="700" height="420" fill="url(#lampGlow)"/>
+  <rect width="700" height="420" fill="url(#blueGlow)"/>
+  <path d="M0 310C92 278 150 300 238 273C333 244 404 260 491 235C582 209 640 216 700 202V420H0V310Z" fill="#1B1A3F" opacity="0.82"/>
+  <ellipse cx="430" cy="323" rx="248" ry="38" fill="#0B0D1F" opacity="0.48" filter="url(#blur)"/>
+  <path d="M104 312H658L616 388H56L104 312Z" fill="url(#desk)"/>
+  <path d="M97 312H654" stroke="#58477F" stroke-opacity="0.55" stroke-width="3"/>
+  <path d="M510 150L559 170L514 190L466 169L510 150Z" fill="#22213F"/>
+  <path d="M515 168L555 184L519 201L477 185L515 168Z" fill="#F8C66B" opacity="0.24" filter="url(#blur)"/>
+  <path d="M526 182L572 317" stroke="#2A2846" stroke-width="11" stroke-linecap="round"/>
+  <path d="M573 318H636" stroke="#2A2846" stroke-width="12" stroke-linecap="round"/>
+  <path d="M520 146C546 152 565 166 576 187C543 190 511 179 481 157C490 149 503 145 520 146Z" fill="#282847"/>
+  <path d="M485 161C511 177 539 186 570 187C552 202 523 203 496 190C481 183 476 171 485 161Z" fill="#FBBF63" opacity="0.26"/>
+  <rect x="355" y="261" width="72" height="65" rx="19" fill="#222753"/>
+  <path d="M427 281H450C464 281 474 292 471 305C469 318 458 326 444 326H427" stroke="#2F365F" stroke-width="9" stroke-linecap="round"/>
+  <path d="M145 314C128 278 119 244 127 214C153 236 169 268 170 314H145Z" fill="#182B35"/>
+  <path d="M164 314C176 272 201 243 236 228C230 272 207 301 181 314H164Z" fill="#142A35"/>
+  <path d="M128 314C96 292 74 264 62 228C99 235 129 266 145 314H128Z" fill="#1B3A40"/>
+  <ellipse cx="155" cy="323" rx="48" ry="11" fill="#090B19" opacity="0.42"/>
+  <path d="M0 0H700V420H0V0Z" fill="url(#room)" opacity="0.04"/>
+</svg>
