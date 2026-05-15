@@ -36,7 +36,7 @@ export function DesktopConnectMoneyPrompt() {
         </div>
       </div>
       <Link
-        href="/wallet"
+        href="/payments/connect-account"
         className="zila-button-hover inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full border border-[#C9CBFF] bg-white/90 px-4 text-[12px] font-semibold text-[#4F46E5] shadow-[0_14px_28px_rgba(99,102,241,0.14)] hover:bg-white"
       >
         Connect

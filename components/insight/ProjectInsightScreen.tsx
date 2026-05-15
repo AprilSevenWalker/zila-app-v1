@@ -51,7 +51,7 @@ export function ProjectInsightScreen() {
 
             <div className="mt-10 flex max-w-[320px] flex-wrap gap-3">
               <Link
-                href="/move-funds"
+                href="/payments/make-payment"
                 className="inline-flex items-center justify-center rounded-full border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] px-4 py-2.5 text-[14px] font-medium text-[#F7FAFF] shadow-[0_0_24px_rgba(99,102,241,0.08),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-sm"
               >
                 Move funds

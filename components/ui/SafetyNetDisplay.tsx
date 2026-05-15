@@ -15,12 +15,12 @@ export function SafetyNetDisplay({
     <div
       className={`rounded-[16px] border px-4 py-3 ${
         dark
-          ? "border-white/8 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+          ? "border-white/14 bg-[#102A4F]/64 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
           : "border-[rgba(18,20,23,0.07)] bg-[#FBFAF7]"
       } ${className}`}
     >
-      <p className={`text-[10px] font-medium ${dark ? "text-[#94A3B8]" : "text-[#6B7280]"}`}>Safety Net: {amount}</p>
-      <p className={`mt-2 text-[11px] leading-[1.45] ${dark ? "text-[#C7D2E2]" : "text-[#526173]"}`}>
+      <p className={`text-[10px] font-medium ${dark ? "text-[#D7FF4F]" : "text-[#5B7218]"}`}>Safety Net: {amount}</p>
+      <p className={`mt-2 text-[11px] leading-[1.45] ${dark ? "text-[#C9D4F5]" : "text-[#526173]"}`}>
         {description}
       </p>
     </div>

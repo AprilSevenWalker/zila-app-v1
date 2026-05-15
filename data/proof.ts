@@ -10,6 +10,8 @@ export interface ProofTimelineItem {
   before?: string;
   after?: string;
   xrplReference: string;
+  txid?: string;
+  xrplExplorerUrl?: string;
 }
 
 export interface ProofOverview {
@@ -26,14 +28,14 @@ export interface ProofOverview {
 
 export function getProofOverview(): ProofOverview {
   return {
-    statusTitle: "All systems recorded",
+    statusTitle: "Verified history current",
     lastUpdate: "2 minutes ago",
     missingRecords: "No missing records",
     syncStatus: "All projects synced",
-    systemStatus: "System status",
+    systemStatus: "Record status",
     operationsStatus: "All operations recorded",
     lastSynced: "Synced 2 minutes ago",
-    needsAttention: "Project Horizon is nearing a shortfall by Friday. Review and move funds to keep delivery on track.",
+    needsAttention: "Project Horizon is nearing a shortfall by Friday, matching a supplier-heavy pattern from last month.",
     timeline: [
       {
         id: "proof-1",
@@ -42,7 +44,7 @@ export function getProofOverview(): ProofOverview {
         context: "Materials added to Project Horizon",
         status: "Recorded",
         timestamp: "11:42",
-        summary: "Material costs were added to Project Horizon and the project outlook was recalculated.",
+        summary: "Material costs were added to Project Horizon and compared with historical operating patterns.",
         project: "Project Horizon",
         before: "Remaining runway: 10 days",
         after: "Remaining runway: 6 days",
@@ -55,7 +57,7 @@ export function getProofOverview(): ProofOverview {
         context: "Supplier invoice assigned to Project Horizon",
         status: "Recorded",
         timestamp: "09:18",
-        summary: "A supplier invoice was parsed, attached to Project Horizon, and prepared for payment review.",
+        summary: "A supplier invoice was attached to Project Horizon and added to the operational timeline.",
         project: "Project Horizon",
         before: "Upcoming due this week: £5,200",
         after: "Upcoming due this week: £9,500",
@@ -68,7 +70,7 @@ export function getProofOverview(): ProofOverview {
         context: "Supplier payment saved against Project Horizon",
         status: "Recorded",
         timestamp: "16:07",
-        summary: "A supplier payment was recorded and reflected in project spend and cash positioning.",
+        summary: "A supplier payment was recorded and reflected in verified project spend and cash positioning.",
         project: "Project Horizon",
         before: "Spent: £14,600",
         after: "Spent: £16,600",
@@ -81,7 +83,7 @@ export function getProofOverview(): ProofOverview {
         context: "Move funds recommendation created for Harbour Road",
         status: "Recorded",
         timestamp: "13:26",
-        summary: "Zila prepared a funding move recommendation to keep Harbour Road aligned through the week.",
+        summary: "A funding move recommendation was recorded after the week matched previous delivery pressure.",
         project: "Harbour Road",
         before: "Available buffer: £8,700",
         after: "Required move: £4,300",

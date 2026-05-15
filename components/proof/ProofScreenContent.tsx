@@ -121,6 +121,10 @@ function extractAmount(action: string) {
   return match?.[0]?.replace(/\s+/g, "") ?? "£2,000";
 }
 
+function verificationLabel(status: string) {
+  return status === "Verified" ? "Verified on XRPL" : status;
+}
+
 function MobileTimelineDetail({
   item,
 }: {
@@ -130,7 +134,7 @@ function MobileTimelineDetail({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(item.xrplReference);
+      await navigator.clipboard.writeText(item.txid ?? item.xrplReference);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     } catch {
@@ -139,7 +143,7 @@ function MobileTimelineDetail({
   };
 
   return (
-    <div className="rounded-[24px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-5 shadow-[0_16px_30px_rgba(5,10,24,0.14),inset_0_1px_0_rgba(255,255,255,0.06)]">
+    <div className="rounded-[24px] border border-white/18 bg-[linear-gradient(180deg,rgba(16,42,79,0.92),rgba(9,25,50,0.94))] p-5 shadow-[0_20px_42px_rgba(13,35,68,0.28),inset_0_1px_0_rgba(255,255,255,0.10)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9FB3D9]">Record detail</p>
@@ -147,32 +151,32 @@ function MobileTimelineDetail({
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/20 bg-emerald-300/12 px-3 py-1 text-[11px] font-medium text-[#E1FBEE]">
           <ShieldCheck className="h-[12px] w-[12px]" strokeWidth={2} />
-          {item.status}
+          {verificationLabel(item.status)}
         </span>
       </div>
 
       <p className="mt-4 text-[15px] leading-[1.7] text-[#D9E2F1]">{item.summary}</p>
 
       <div className="mt-5 grid gap-3">
-        <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+        <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
           <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">Project</p>
           <p className="mt-2 text-[15px] font-semibold text-white">{item.project}</p>
         </div>
         {item.before || item.after ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+            <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">Before</p>
               <p className="mt-2 text-[14px] text-[#E3EBF8]">{item.before ?? "No earlier state recorded"}</p>
             </div>
-            <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+            <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">After</p>
               <p className="mt-2 text-[14px] text-[#E3EBF8]">{item.after ?? "No updated state recorded"}</p>
             </div>
           </div>
         ) : null}
-        <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+        <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">On-chain record</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">txid</p>
             <button
               type="button"
               onClick={handleCopy}
@@ -182,7 +186,20 @@ function MobileTimelineDetail({
               {copied ? "Copied" : "Copy"}
             </button>
           </div>
-          <p className="mt-2 font-mono text-[13px] tracking-[0.08em] text-[#DCE7F8]">{item.xrplReference}</p>
+          <p className="mt-2 break-all font-mono text-[13px] tracking-[0.04em] text-[#DCE7F8]">
+            {item.txid ?? item.xrplReference}
+          </p>
+          {item.xrplExplorerUrl ? (
+            <Link
+              href={item.xrplExplorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-[14px] border border-emerald-300/18 bg-emerald-300/10 px-4 py-3 text-[13px] font-semibold text-[#E7EEFF] transition hover:bg-emerald-300/14"
+            >
+              View on explorer
+              <ArrowUpRight className="h-[13px] w-[13px]" strokeWidth={2} />
+            </Link>
+          ) : null}
         </div>
       </div>
     </div>
@@ -201,7 +218,7 @@ function DesktopHighlightPanel({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(item.xrplReference);
+      await navigator.clipboard.writeText(item.txid ?? item.xrplReference);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
     } catch {
@@ -232,10 +249,10 @@ function DesktopHighlightPanel({
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-300/14 bg-emerald-300/10 text-[#DFFBF0]">
                 <CheckCircle2 className="h-[14px] w-[14px]" strokeWidth={2} />
               </span>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#D7E0F6]">Verified on-chain</p>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#D7E0F6]">Verified on XRPL</p>
             </div>
             <span className="inline-flex items-center rounded-full border border-emerald-300/14 bg-emerald-300/10 px-3 py-1 text-[11px] font-medium text-[#DFFBF0]">
-              Confirmed
+              {verificationLabel(item.status)}
             </span>
           </div>
 
@@ -244,7 +261,7 @@ function DesktopHighlightPanel({
             <p className="mt-1 text-[15px] text-[#D2DCEF]">Confirmed on XRPL</p>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-3 rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+          <div className="mt-5 grid grid-cols-3 gap-3 rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
             <div>
               <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">Timestamp</p>
               <p className="mt-2 text-[13px] text-[#E3EBF8]">Today, {item.timestamp}</p>
@@ -259,10 +276,12 @@ function DesktopHighlightPanel({
             </div>
           </div>
 
-          <div className="mt-4 rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">On-chain reference</p>
+          <div className="mt-4 rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">txid</p>
             <div className="mt-2 flex items-center justify-between gap-3 rounded-[14px] border border-white/8 bg-[#0D1426]/80 px-3 py-3">
-              <p className="font-mono text-[14px] tracking-[0.08em] text-[#E3EBF8]">{item.xrplReference}</p>
+              <p className="min-w-0 break-all font-mono text-[13px] tracking-[0.04em] text-[#E3EBF8]">
+                {item.txid ?? item.xrplReference}
+              </p>
               <button
                 type="button"
                 onClick={handleCopy}
@@ -276,8 +295,13 @@ function DesktopHighlightPanel({
 
           <div className="mt-4 flex gap-3">
             <Link
-              href="#"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-white/10 bg-white/5 px-4 py-3 text-[13px] font-semibold text-[#E7EEFF] transition hover:bg-white/8"
+              href={item.xrplExplorerUrl ?? "#"}
+              target={item.xrplExplorerUrl ? "_blank" : undefined}
+              rel={item.xrplExplorerUrl ? "noreferrer" : undefined}
+              aria-disabled={!item.xrplExplorerUrl}
+              className={`inline-flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-white/10 px-4 py-3 text-[13px] font-semibold text-[#E7EEFF] transition ${
+                item.xrplExplorerUrl ? "bg-white/5 hover:bg-white/8" : "pointer-events-none bg-white/[0.025] opacity-60"
+              }`}
             >
               View on explorer
               <ArrowUpRight className="h-[13px] w-[13px]" strokeWidth={2} />
@@ -309,9 +333,9 @@ function DesktopHighlightPanel({
         </section>
 
         <section className="mt-4 rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#D7E0F6]">Use this proof</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#D7E0F6]">Use this history</p>
           <p className="mt-2 text-[14px] leading-[1.65] text-[#D2DCEF]">
-            Download, share, or export your verified records for partners, finance teams, and reporting.
+            Download, share, or export your verified activity history for partners and finance teams.
           </p>
           <div className="mt-4 grid grid-cols-3 gap-3">
             <button
@@ -358,7 +382,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
   const selectedItem = overview.timeline.find((item) => item.id === selectedId) ?? overview.timeline[0];
 
   return (
-    <div className="-mx-4 -mt-2 min-h-[calc(100vh-7.5rem)] bg-[linear-gradient(160deg,#0A1225_0%,#111B38_34%,#18254B_68%,#10253A_100%)] px-4 pb-28 pt-6 text-white md:-mx-6 md:rounded-[34px] md:px-6 md:pb-12 lg:-mx-8 lg:px-8">
+    <div className="zila-unified-page -mx-4 -mt-2 min-h-[calc(100vh-7.5rem)] px-4 pb-28 pt-6 text-white md:-mx-6 md:rounded-[34px] md:px-6 md:pb-12 lg:-mx-8 lg:px-8">
       <div className="mx-auto max-w-[1180px]">
         <div className="max-w-[420px] lg:max-w-none">
           <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#AFC0FF]">Proof of Operations</p>
@@ -368,7 +392,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
                 Proof of Operations
               </h1>
               <p className="mt-4 text-[15px] leading-[1.72] text-[#C8D5EA]">
-                Every decision and transaction, recorded.
+                A living operational history of decisions, transactions, and verified activity.
               </p>
             </div>
 
@@ -382,7 +406,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
               </div>
               <Link
                 href="/proof"
-                className="inline-flex items-center gap-2 rounded-[16px] border border-white/12 bg-white/[0.03] px-4 py-3 text-[13px] font-semibold text-[#E7EEFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:bg-white/[0.05]"
+                className="inline-flex items-center gap-2 rounded-[16px] border border-white/18 bg-[#173D6D]/66 px-4 py-3 text-[13px] font-semibold text-[#E7EEFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.09)] transition hover:bg-[#1E4A7D]"
               >
                 Proof of Operations
                 <ArrowUpRight className="h-[13px] w-[13px]" strokeWidth={2} />
@@ -392,7 +416,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
         </div>
 
         <div className="mt-6 lg:hidden">
-          <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.035))] p-5 shadow-[0_18px_38px_rgba(6,10,24,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] md:p-6">
+          <div className="rounded-[28px] border border-white/18 bg-[linear-gradient(180deg,rgba(16,42,79,0.90),rgba(9,25,50,0.94))] p-5 shadow-[0_20px_42px_rgba(13,35,68,0.28),inset_0_1px_0_rgba(255,255,255,0.10)] md:p-6">
             <div className="flex items-start gap-3">
               <IconTile size="md" glow="cyan" className="bg-white/10 text-[#E7F8FF]">
                 <ShieldCheck className="h-[16px] w-[16px]" strokeWidth={2} />
@@ -400,15 +424,15 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
               <div className="min-w-0 flex-1">
                 <p className="text-[22px] font-semibold tracking-[-0.03em] text-white">{overview.statusTitle}</p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                  <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                     <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">Last update</p>
                     <p className="mt-2 text-[14px] font-medium text-[#E3EBF8]">{overview.lastUpdate}</p>
                   </div>
-                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                  <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                     <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">Record status</p>
                     <p className="mt-2 text-[14px] font-medium text-[#E3EBF8]">{overview.missingRecords}</p>
                   </div>
-                  <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                  <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                     <p className="text-[10px] uppercase tracking-[0.16em] text-[#8EA4C8]">Sync</p>
                     <p className="mt-2 text-[14px] font-medium text-[#E3EBF8]">{overview.syncStatus}</p>
                   </div>
@@ -421,7 +445,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
         <div className="mt-6 hidden lg:grid lg:grid-cols-4 lg:gap-4">
           <button
             type="button"
-            className="group rounded-[22px] border border-[#8B5CF6]/32 bg-[linear-gradient(180deg,rgba(48,28,92,0.84),rgba(24,17,50,0.9))] p-5 text-left shadow-[0_24px_40px_rgba(15,10,35,0.3),0_0_34px_rgba(139,92,246,0.24),inset_0_1px_0_rgba(255,255,255,0.06)] transition hover:-translate-y-1 hover:shadow-[0_28px_44px_rgba(15,10,35,0.34),0_0_40px_rgba(139,92,246,0.3),inset_0_1px_0_rgba(255,255,255,0.08)]"
+            className="zila-unified-panel group rounded-[22px] p-5 text-left transition hover:-translate-y-1"
           >
             <FeatureIconContainer tone="proof">
               <ProofFeatureMark className="h-[19px] w-[19px]" />
@@ -432,8 +456,8 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
                 Primary
               </span>
             </div>
-            <p className="mt-3 text-[14px] leading-[1.65] text-[#D7CEF7]">
-              Generate a verified record of your transactions, project activity, and financial state.
+              <p className="mt-3 text-[14px] leading-[1.65] text-[#D7CEF7]">
+              View verified transactions, project activity, and financial state as operational history.
             </p>
             <ul className="mt-4 space-y-2 text-[12px] text-[#E5DBFF]">
               <li>Transactions verified</li>
@@ -444,21 +468,21 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
               <FeatureIconContainer tone="proof" size="sm">
                 <ProofFeatureMark className="h-[15px] w-[15px]" />
               </FeatureIconContainer>
-              Generate proof
+              View operational history
               <ArrowUpRight className="h-[13px] w-[13px]" strokeWidth={2} />
             </div>
           </button>
 
           <button
             type="button"
-            className="group rounded-[22px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(10,31,52,0.78),rgba(10,22,38,0.86))] p-5 text-left shadow-[0_18px_30px_rgba(5,10,24,0.18),0_0_22px_rgba(34,211,238,0.08)] transition hover:-translate-y-1"
+            className="zila-unified-panel-soft group rounded-[22px] p-5 text-left transition hover:-translate-y-1"
           >
             <FeatureIconContainer tone="cashflow">
               <CashflowFeatureMark className="h-[19px] w-[19px]" />
             </FeatureIconContainer>
-            <p className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-white">Cashflow Summary</p>
+            <p className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-white">Historical Financial Activity</p>
             <p className="mt-3 text-[14px] leading-[1.65] text-[#C4EAF3]">
-              Snapshot of money in and out with key insights.
+              Verified money movement with recurring behaviour and operating context.
             </p>
             <ul className="mt-4 space-y-2 text-[12px] text-[#D7F3F9]">
               <li>Income vs expenses</li>
@@ -469,21 +493,21 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
               <FeatureIconContainer tone="cashflow" size="sm">
                 <CashflowFeatureMark className="h-[15px] w-[15px]" />
               </FeatureIconContainer>
-              Generate report
+              View activity history
               <ArrowUpRight className="h-[13px] w-[13px]" strokeWidth={2} />
             </div>
           </button>
 
           <button
             type="button"
-            className="group rounded-[22px] border border-amber-300/18 bg-[linear-gradient(180deg,rgba(52,31,11,0.76),rgba(36,24,14,0.84))] p-5 text-left shadow-[0_18px_30px_rgba(5,10,24,0.18),0_0_22px_rgba(251,191,36,0.08)] transition hover:-translate-y-1"
+            className="group rounded-[22px] border border-amber-300/18 bg-[linear-gradient(180deg,rgba(251,191,36,0.16),rgba(16,42,79,0.62))] p-5 text-left shadow-[0_18px_30px_rgba(31,68,116,0.18),0_0_22px_rgba(251,191,36,0.08),inset_0_1px_0_rgba(255,255,255,0.10)] transition hover:-translate-y-1"
           >
             <FeatureIconContainer tone="health">
               <HealthFeatureMark className="h-[19px] w-[19px]" />
             </FeatureIconContainer>
-            <p className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-white">Project Health</p>
+            <p className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-white">Recorded Decisions</p>
             <p className="mt-3 text-[14px] leading-[1.65] text-[#F1D9B2]">
-              Track risk, runway, and financial stability.
+              Review decisions, runway changes, and pressure points as they happened.
             </p>
             <ul className="mt-4 space-y-2 text-[12px] text-[#F8E7CD]">
               <li>Runway analysis</li>
@@ -494,21 +518,21 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
               <FeatureIconContainer tone="health" size="sm">
                 <HealthFeatureMark className="h-[15px] w-[15px]" />
               </FeatureIconContainer>
-              Generate report
+              View decision history
               <ArrowUpRight className="h-[13px] w-[13px]" strokeWidth={2} />
             </div>
           </button>
 
           <button
             type="button"
-            className="group rounded-[22px] border border-white/12 bg-[linear-gradient(180deg,rgba(34,40,64,0.82),rgba(18,24,42,0.88))] p-5 text-left shadow-[0_18px_30px_rgba(5,10,24,0.18)] transition hover:-translate-y-1"
+            className="zila-unified-panel-soft group rounded-[22px] p-5 text-left transition hover:-translate-y-1"
           >
             <FeatureIconContainer tone="export">
               <ExportFeatureMark className="h-[19px] w-[19px]" />
             </FeatureIconContainer>
-            <p className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-white">Custom Export</p>
+            <p className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-white">Operational Timeline</p>
             <p className="mt-3 text-[14px] leading-[1.65] text-[#D2DCEF]">
-              Build your own report with custom date ranges, categories, and metrics.
+              Filter verified history by date range, category, and operating signal.
             </p>
             <ul className="mt-4 space-y-2 text-[12px] text-[#E4EAF9]">
               <li>Flexible date range</li>
@@ -531,7 +555,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
               <h2 className="text-[28px] font-semibold tracking-[-0.04em] text-white">Recorded activity</h2>
               <button
                 type="button"
-                className="rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[12px] font-semibold text-[#DCE7F8] transition hover:bg-white/[0.05]"
+                className="rounded-full border border-white/16 bg-[#173D6D]/62 px-4 py-2 text-[12px] font-semibold text-[#EAF1FF] transition hover:bg-[#1E4A7D]"
               >
                 All activity
               </button>
@@ -578,10 +602,10 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
                           onClick={() => setSelectedId(item.id)}
                           className={`w-full rounded-[24px] border px-5 py-4 text-left transition-all duration-200 ${
                             isSelected
-                              ? "border-cyan-300/22 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.04))] shadow-[0_18px_30px_rgba(34,211,238,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]"
+                              ? "border-cyan-300/30 bg-[linear-gradient(180deg,rgba(34,211,238,0.16),rgba(16,42,79,0.88))] shadow-[0_18px_34px_rgba(13,35,68,0.26),inset_0_1px_0_rgba(255,255,255,0.12)]"
                               : isMostRecent
-                                ? "border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.03))] shadow-[0_18px_28px_rgba(6,10,24,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-white/16"
-                                : "border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[0_10px_20px_rgba(6,10,24,0.1),inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/12 hover:bg-white/[0.06]"
+                                ? "border-white/18 bg-[linear-gradient(180deg,rgba(23,61,109,0.76),rgba(16,42,79,0.88))] shadow-[0_18px_30px_rgba(13,35,68,0.22),inset_0_1px_0_rgba(255,255,255,0.10)] hover:border-white/24"
+                                : "border-white/14 bg-[linear-gradient(180deg,rgba(16,42,79,0.72),rgba(9,25,50,0.84))] shadow-[0_12px_24px_rgba(13,35,68,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] hover:border-white/20 hover:bg-[#173D6D]/70"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-4">
@@ -606,7 +630,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
                               <div className="mt-4 flex flex-wrap items-center gap-3 text-[12px]">
                                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/18 bg-emerald-300/12 px-2.5 py-1 font-medium text-[#E1FBEE]">
                                   <CheckCheck className="h-[11px] w-[11px]" strokeWidth={2} />
-                                  {item.status}
+                                  {verificationLabel(item.status)}
                                 </span>
                                 <span className="inline-flex items-center gap-1.5 text-[#9FB3D9]">
                                   <Clock3 className="h-[12px] w-[12px]" strokeWidth={2} />
@@ -627,7 +651,7 @@ export function ProofScreenContent({ overview }: { overview: ProofOverview }) {
             <div className="hidden lg:flex lg:justify-center">
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-[16px] border border-white/10 bg-white/[0.03] px-5 py-3 text-[13px] font-semibold text-[#E7EEFF] transition hover:bg-white/[0.05]"
+                className="inline-flex items-center gap-2 rounded-[16px] border border-white/18 bg-[#173D6D]/66 px-5 py-3 text-[13px] font-semibold text-[#E7EEFF] transition hover:bg-[#1E4A7D]"
               >
                 View all activity
                 <ArrowDownToLine className="h-[13px] w-[13px]" strokeWidth={2} />

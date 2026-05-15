@@ -66,7 +66,7 @@ export function MockInvoiceUpload({
       clearTimeout(applyTimeoutRef.current);
     }
 
-    parseTimeoutRef.current = window.setTimeout(() => {
+    parseTimeoutRef.current = setTimeout(() => {
       setStage("detected");
     }, 900);
 
@@ -84,7 +84,7 @@ export function MockInvoiceUpload({
       clearTimeout(applyTimeoutRef.current);
     }
 
-    applyTimeoutRef.current = window.setTimeout(() => {
+    applyTimeoutRef.current = setTimeout(() => {
       setStage("applied");
     }, 950);
   };
@@ -125,7 +125,7 @@ export function MockInvoiceUpload({
 
       {stage === "detected" || stage === "applying" || stage === "applied" ? (
         <div className={`mt-4 space-y-4 ${inlineInFlexRow ? "basis-full" : ""}`}>
-          <section className="max-w-[86%] rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.58),rgba(15,23,42,0.32))] p-5 shadow-[0_20px_48px_rgba(5,10,24,0.24),0_0_28px_rgba(34,211,238,0.06),inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <section className="max-w-[86%] rounded-[24px] border border-white/18 bg-[linear-gradient(180deg,rgba(16,42,79,0.94),rgba(9,25,50,0.96))] p-5 shadow-[0_24px_54px_rgba(13,35,68,0.36),inset_0_1px_0_rgba(255,255,255,0.12)]">
             <div className="flex items-center gap-2">
               <FileText className="h-[14px] w-[14px] text-[#7EE7F6]" strokeWidth={1.9} />
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#AFC0FF]">
@@ -133,20 +133,20 @@ export function MockInvoiceUpload({
               </p>
             </div>
             <div className="mt-4 space-y-2.5">
-              <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/8 bg-white/[0.04] px-4 py-3">
+              <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/12 bg-[#173D6D]/60 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-[#AFC0FF]">Amount</p>
                 <p className="text-[15px] font-semibold text-white">{mockInvoice.amount}</p>
               </div>
-              <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/8 bg-white/[0.04] px-4 py-3">
+              <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/12 bg-[#173D6D]/60 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-[#AFC0FF]">Due</p>
                 <p className="text-[15px] font-semibold text-white">{mockInvoice.due}</p>
               </div>
-              <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/8 bg-white/[0.04] px-4 py-3">
+              <div className="flex items-center justify-between gap-4 rounded-[18px] border border-white/12 bg-[#173D6D]/60 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                 <p className="text-[12px] font-medium uppercase tracking-[0.16em] text-[#AFC0FF]">Assigned to</p>
                 <p className="text-[15px] font-semibold text-white">{assignedProject}</p>
               </div>
             </div>
-            <div className="mt-5 rounded-[18px] border border-white/8 bg-white/[0.04] px-4 py-3">
+            <div className="mt-5 rounded-[18px] border border-white/12 bg-[#173D6D]/60 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#AFC0FF]">
                 Suggested move
               </p>
@@ -164,7 +164,7 @@ export function MockInvoiceUpload({
 
           {stage === "applied" ? (
             <>
-              <section className="max-w-[86%] rounded-[24px] border border-emerald-200/10 bg-[linear-gradient(180deg,rgba(110,231,183,0.06),rgba(110,231,183,0.025))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <section className="max-w-[86%] rounded-[24px] border border-emerald-200/22 bg-[linear-gradient(180deg,rgba(16,185,129,0.18),rgba(15,72,64,0.34))] p-4 shadow-[0_18px_38px_rgba(13,35,68,0.26),inset_0_1px_0_rgba(255,255,255,0.10)]">
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="mt-1 h-[18px] w-[18px] flex-shrink-0 text-[#BEEFD9]" strokeWidth={1.9} />
                   <div>
@@ -177,12 +177,12 @@ export function MockInvoiceUpload({
                 </div>
               </section>
 
-              <section className="max-w-[86%] rounded-[24px] border border-white/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.018))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <section className="max-w-[86%] rounded-[24px] border border-white/16 bg-[linear-gradient(180deg,rgba(23,61,109,0.70),rgba(16,42,79,0.86))] p-4 shadow-[0_18px_38px_rgba(13,35,68,0.22),inset_0_1px_0_rgba(255,255,255,0.10)]">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#9FB3D9]">
-                  Saved to Proof
+                  Added to verified history
                 </p>
                 <div className="mt-4 flex items-start gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/8 bg-white/[0.035] text-[#D8E7F8] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/14 bg-[#173D6D]/74 text-[#D8E7F8] shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
                     <TimerReset className="h-[16px] w-[16px]" strokeWidth={1.9} />
                   </span>
                   <p className="text-[15px] leading-[1.72] text-[#C5D3E9]">

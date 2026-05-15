@@ -19,6 +19,7 @@ import {
 
 import { formatTransactionHash, saveProofTransaction, shortenWalletAddress, type ProofLinkedType } from "@/lib/proofTransactionStore";
 import { saveMoneySourceState } from "@/lib/moneySourceStore";
+import { saveLatestPaymentTransaction } from "@/lib/paymentTransactionStore";
 
 interface LinkTarget {
   id: string;
@@ -81,7 +82,7 @@ const linkTargets: LinkTarget[] = [
     type: "project",
     project: "Project Horizon",
     context: "Payment recorded for Project Horizon",
-    summary: "A verified payment was recorded and attached to Project Horizon for Proof of Operations.",
+    summary: "A verified payment was recorded and attached to Project Horizon's operating history.",
   },
   {
     id: "harbour-road",
@@ -89,7 +90,7 @@ const linkTargets: LinkTarget[] = [
     type: "project",
     project: "Harbour Road",
     context: "Funds move recorded for Harbour Road",
-    summary: "A verified funds movement was recorded and attached to Harbour Road for Proof of Operations.",
+    summary: "A verified funds movement was recorded and attached to Harbour Road's operating history.",
   },
   {
     id: "supplier-payment",
@@ -97,7 +98,7 @@ const linkTargets: LinkTarget[] = [
     type: "payment",
     project: "Project Horizon",
     context: "Payment action recorded for supplier settlement",
-    summary: "A verified payment was recorded and linked to a supplier payment action for Proof of Operations.",
+    summary: "A verified payment was recorded and linked to the supplier payment history.",
   },
 ];
 
@@ -236,6 +237,15 @@ export function WalletOnChainScreen() {
 
     setResult(confirmedResult);
     setPaymentMessage("Payment confirmed.");
+    saveLatestPaymentTransaction({
+      txid: payload.response.txid,
+      amountLabel: pendingFlow.amountLabel,
+      amountValue: pendingFlow.amountValue,
+      projectName: pendingFlow.project,
+      walletAddress: account,
+      network: "XRPL Mainnet",
+      createdAtIso: resolvedAt,
+    });
     saveProofTransaction({
       id: `wallet-${payloadId}`,
       walletAddress: account,
@@ -549,7 +559,7 @@ export function WalletOnChainScreen() {
             <p className="text-[12px] leading-[1.6] text-[#667085]">
               {kind === "connect"
                 ? "After approval, your account will be available as the active money source."
-                : "After approval, the payment will settle on XRPL Mainnet and appear in Proof automatically."}
+                : "After approval, the payment will settle on XRPL Mainnet and appear in verified history."}
             </p>
           </div>
         </div>
@@ -711,7 +721,7 @@ export function WalletOnChainScreen() {
               <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#6B7280]">Make payment</p>
               <h2 className="mt-3 text-[26px] font-semibold tracking-[-0.04em] text-[#121417]">Move funds with a record attached</h2>
               <p className="mt-2 text-[14px] leading-[1.7] text-[#667085]">
-                Approve the payment in Xaman and Zila will add the verified record to Proof automatically.
+                Approve the payment in Xaman and Zila will add the verified record to your operational history.
               </p>
 
               <div className="mt-6 space-y-4">
@@ -814,17 +824,17 @@ export function WalletOnChainScreen() {
                   <p className="mt-1 text-[14px] text-[#D2DCEF]">{result.linkedLabel}</p>
 
                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[18px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                    <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-[#9FB3D9]">Timestamp</p>
                       <p className="mt-2 text-[14px] font-medium text-white">{formatDisplayDate(new Date(result.createdAtIso))}</p>
                     </div>
-                    <div className="rounded-[18px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                    <div className="rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-[#9FB3D9]">Reference ID</p>
                       <p className="mt-2 text-[14px] font-medium text-white">{result.hash ? formatTransactionHash(result.hash) : "Waiting for confirmation"}</p>
                     </div>
                   </div>
 
-                  <details className="mt-5 rounded-[18px] border border-white/8 bg-white/[0.04] px-4 py-3">
+                  <details className="mt-5 rounded-[18px] border border-white/14 bg-[#173D6D]/58 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                     <summary className="cursor-pointer text-[13px] font-semibold text-white">Transaction detail</summary>
                     <div className="mt-3 grid gap-3 text-[13px] text-[#D2DCEF]">
                       <p>Network: {result.network}</p>
@@ -867,7 +877,7 @@ export function WalletOnChainScreen() {
                 <div className="mt-6 rounded-[24px] border border-[rgba(18,20,23,0.08)] bg-[#F8F6F1] p-5">
                   <p className="text-[15px] font-semibold text-[#121417]">No recent payments yet</p>
                   <p className="mt-2 text-[14px] leading-[1.7] text-[#667085]">
-                    Once you make a payment here, the latest record will appear in this activity view and sync into Proof of Operations.
+                    Once you make a payment here, the latest record will appear in this activity view and sync into verified history.
                   </p>
                 </div>
               )}

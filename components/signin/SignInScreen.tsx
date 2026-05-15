@@ -64,7 +64,7 @@ export function SignInScreen() {
 
     timeoutRef.current = setTimeout(() => {
       startTransition(() => {
-        router.push("/insight");
+        router.push(mode === "sign-up" ? "/onboarding" : "/home");
       });
     }, 1500);
   };
@@ -128,7 +128,7 @@ export function SignInScreen() {
           </h1>
 
           <p className="mt-5 max-w-[292px] text-[15px] leading-[1.68] text-[#D4DCEF]/82">
-            We&apos;ll pick up your latest projects and insights.
+            We&apos;ll pick up your latest projects and operating signals.
           </p>
 
           <form

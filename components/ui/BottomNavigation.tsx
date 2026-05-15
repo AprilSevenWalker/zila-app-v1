@@ -27,7 +27,7 @@ export function BottomNavigation() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-20 md:hidden">
       <div className="mx-auto max-w-[390px] px-4 pb-4">
-        <div className="flex items-end justify-around rounded-[24px] border border-[rgba(18,20,23,0.08)] bg-white/95 px-2 pt-2 shadow-[0_20px_50px_rgba(15,23,42,0.18)] backdrop-blur-sm">
+        <div className="flex items-end justify-around rounded-[24px] border border-[#7CF3FF]/14 bg-[#102347]/94 px-2 pt-2 shadow-[0_20px_50px_rgba(1,8,20,0.40),0_0_24px_rgba(89,225,255,0.08)] backdrop-blur-md">
           {navItems.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -40,16 +40,16 @@ export function BottomNavigation() {
                 className="relative flex flex-1 flex-col items-center px-2 py-3 transition-opacity hover:opacity-75"
               >
                 <IconTile
-                  className={`mb-1 ${isActive ? "text-[#0F172A] bg-[#F3F0EA]" : "text-[#475569] bg-[#FAF8F4]"}`}
+                  className={`mb-1 ${isActive ? "text-[#F7F8FC] bg-[#2F80FF]" : "text-[#C9D4F5] bg-white/[0.06]"}`}
                   glow={isActive ? "indigo" : "none"}
                 >
                   <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
                 </IconTile>
-                <span className={`text-[11px] font-medium ${isActive ? "text-[#121417]" : "text-[#71717A]"}`}>
+                <span className={`text-[11px] font-medium ${isActive ? "text-[#F7F8FC]" : "text-[#C9D4F5]"}`}>
                   {item.name}
                 </span>
                 {isActive ? (
-                  <span className="absolute bottom-0 h-1.5 w-1.5 rounded-full bg-[#6366F1] shadow-[0_0_12px_rgba(99,102,241,0.24)]"></span>
+                  <span className="absolute bottom-0 h-1.5 w-1.5 rounded-full bg-[#D7FF4F] shadow-[0_0_12px_rgba(215,255,79,0.34)]"></span>
                 ) : null}
               </Link>
             );

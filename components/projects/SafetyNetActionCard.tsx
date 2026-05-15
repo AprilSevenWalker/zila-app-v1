@@ -21,7 +21,7 @@ export function SafetyNetActionCard({
   shortfallText,
   supportingText,
   note,
-  automaticMessage = "Zila will step in automatically if no action is taken",
+  automaticMessage = "Safety Net can cover this if no action is taken",
   statusLabel = "Protection ready",
   buttonLabel = "Stay on track",
   amount,

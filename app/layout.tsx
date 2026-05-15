@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Zila",
-  description: "Zila - Your AI coding project",
+  description: "Zila keeps business activity, money movement, and operational history in sync.",
 };
 
 export default function RootLayout({

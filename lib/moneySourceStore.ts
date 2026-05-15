@@ -56,6 +56,15 @@ export function saveMoneySourceState(state: MoneySourceState) {
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT, { detail: state }));
 }
 
+export function disconnectMoneySource() {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT));
+}
+
 export function subscribeToMoneySource(onChange: () => void) {
   if (!isBrowser()) {
     return () => undefined;

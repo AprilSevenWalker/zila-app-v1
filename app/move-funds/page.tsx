@@ -1,5 +1,11 @@
-import { MoveFundsScreen } from "@/components/actions/MoveFundsScreen";
+import { Suspense } from "react";
+
+import { ReserveFlowScreen } from "@/components/actions/ReserveFlowScreen";
 
 export default function MoveFundsPage() {
-  return <MoveFundsScreen />;
+  return (
+    <Suspense fallback={null}>
+      <ReserveFlowScreen />
+    </Suspense>
+  );
 }

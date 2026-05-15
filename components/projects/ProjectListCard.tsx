@@ -97,22 +97,22 @@ export function ProjectListCard({ project, featured = false }: ProjectListCardPr
 
       <div className={`relative ${featured ? "" : "border-l-2 border-[#D9DEE8] pl-4"}`}>
         {featured ? (
-          <div className="rounded-[16px] border border-white/8 bg-gradient-to-r from-white/[0.05] to-white/[0.03] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_0_24px_rgba(99,102,241,0.04)]">
-            <p className="mb-2 text-[11px] font-semibold text-[#9FB4FF]">Insight</p>
+          <div className="rounded-[16px] border border-white/14 bg-gradient-to-r from-[#173D6D]/66 to-[#102A4F]/72 px-4 py-4 shadow-[0_14px_28px_rgba(13,35,68,0.16),inset_0_1px_0_rgba(255,255,255,0.08)]">
+            <p className="mb-2 text-[11px] font-semibold text-[#9FB4FF]">Operating signal</p>
             <p className="text-[13px] leading-relaxed text-[#F8FAFC]">
               {project.insight}
             </p>
             <div className="mt-4 flex items-start gap-2 border-t border-white/8 pt-4">
               <Landmark className="mt-0.5 h-[12px] w-[12px] flex-shrink-0 text-[#7EE7F6]" strokeWidth={1.9} />
               <div>
-                <p className="text-[11px] font-semibold text-[#7EE7F6]">Zila suggests</p>
+                <p className="text-[11px] font-semibold text-[#7EE7F6]">Suggested move</p>
                 <p className="mt-1 text-[13px] text-[#F8FAFC]">{project.zilaSuggestionShort}</p>
               </div>
             </div>
           </div>
         ) : (
           <>
-            <p className="mb-2 text-[11px] font-semibold text-[#6366F1]">Insight</p>
+            <p className="mb-2 text-[11px] font-semibold text-[#6366F1]">Operating signal</p>
             <p className="text-[13px] leading-relaxed text-[#121417]">
               {project.insight}
             </p>

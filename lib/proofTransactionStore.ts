@@ -105,6 +105,10 @@ export function formatTransactionHash(hash: string) {
   return `XRPL-${compact.slice(0, 4)}-${compact.slice(4, 8)}-${compact.slice(8, 12)}`;
 }
 
+export function buildXrplExplorerUrl(hash: string) {
+  return `https://xumm.app/explorer/mainnet/${hash}`;
+}
+
 function toRelativeDay(createdAtIso: string): "Today" | "Yesterday" {
   const createdAt = new Date(createdAtIso);
   const today = new Date();
@@ -118,7 +122,7 @@ function toRelativeDay(createdAtIso: string): "Today" | "Yesterday" {
 
 export function storedTransactionToTimelineItem(transaction: StoredProofTransaction): ProofTimelineItem {
   const linkedLabel = transaction.linkedType === "project" ? `Project: ${transaction.linkedLabel}` : `Payment action: ${transaction.linkedLabel}`;
-  const timelineStatus = transaction.status === "Confirmed" ? "Verified" : transaction.status;
+  const timelineStatus = transaction.status === "Confirmed" ? "Verified on XRPL" : transaction.status;
 
   return {
     id: transaction.id,
@@ -132,6 +136,8 @@ export function storedTransactionToTimelineItem(transaction: StoredProofTransact
     before: linkedLabel,
     after: `${transaction.network} · Wallet ${transaction.walletAddressShort}`,
     xrplReference: formatTransactionHash(transaction.hash),
+    txid: transaction.hash,
+    xrplExplorerUrl: buildXrplExplorerUrl(transaction.hash),
   };
 }
 

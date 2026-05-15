@@ -16,12 +16,12 @@ export function TopBar({
   notificationLabel = "14 day streak",
 }: TopBarProps) {
   return (
-    <div className="flex items-center justify-between border-b border-[rgba(18,20,23,0.08)] bg-white px-4 py-3 text-sm">
-      <span className="text-[12px] font-semibold text-[#121417]">{time}</span>
-      <span className="text-[12px] font-medium text-[#6B7280]">{dayLabel}</span>
+    <div className="flex items-center justify-between border-b border-[#7CF3FF]/12 bg-[#06101F]/90 px-4 py-3 text-sm backdrop-blur-md">
+      <span className="text-[12px] font-semibold text-[#EAF1FF]">{time}</span>
+      <span className="text-[12px] font-medium text-[#C9D4F5]">{dayLabel}</span>
       <Link
         href="/proof"
-        className="flex items-center gap-1.5 rounded-full bg-[#6366F1] px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-[#6366F1]/30 transition hover:opacity-90"
+        className="flex items-center gap-1.5 rounded-full border border-[#D7FF4F]/22 bg-[#D7FF4F]/10 px-3 py-1.5 text-xs font-semibold text-[#F1FFB8] shadow-lg shadow-[#D7FF4F]/10 transition hover:opacity-90"
       >
         <span>{notificationIcon}</span>
         <span>{notificationLabel}</span>

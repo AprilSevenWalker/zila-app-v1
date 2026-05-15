@@ -126,8 +126,8 @@ export function MoveFundsScreen() {
                       onClick={() => setSource(option.label)}
                       className={`flex w-full items-center justify-between rounded-[20px] border px-4 py-4 text-left transition ${
                         isSelected
-                          ? "border-cyan-300/22 bg-[linear-gradient(180deg,rgba(34,211,238,0.1),rgba(129,140,248,0.08))] shadow-[0_0_24px_rgba(34,211,238,0.08),inset_0_1px_0_rgba(255,255,255,0.12)]"
-                          : "border-white/10 bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                          ? "border-cyan-300/30 bg-[linear-gradient(180deg,rgba(34,211,238,0.16),rgba(16,42,79,0.88))] shadow-[0_14px_28px_rgba(13,35,68,0.20),inset_0_1px_0_rgba(255,255,255,0.12)]"
+                          : "border-white/16 bg-[#102A4F]/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -150,7 +150,7 @@ export function MoveFundsScreen() {
               </div>
             </div>
 
-            <div className="rounded-[20px] border border-white/10 bg-white/[0.05] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+            <div className="rounded-[20px] border border-white/16 bg-[#102A4F]/62 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-[#B8C1DE]">Destination</p>
               <p className="mt-2 text-[20px] font-semibold text-white">Project Horizon</p>
             </div>

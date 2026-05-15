@@ -73,7 +73,7 @@ export function NextMoveCard({
       <div className={`mt-4 grid gap-2 ${compact ? "grid-cols-1" : "grid-cols-1"}`}>
         <div
           className={`flex items-center gap-2 rounded-[14px] px-3 py-2.5 ${
-            dark ? "bg-white/[0.04] text-[#E9EEF7]" : "bg-white text-[#334155]"
+            dark ? "border border-white/14 bg-[#102A4F]/64 text-[#E9EEF7] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white text-[#334155]"
           }`}
         >
           <TriangleAlert
@@ -84,7 +84,7 @@ export function NextMoveCard({
         </div>
         <div
           className={`flex items-center gap-2 rounded-[14px] px-3 py-2.5 ${
-            dark ? "bg-white/[0.04] text-[#E9EEF7]" : "bg-white text-[#334155]"
+            dark ? "border border-white/14 bg-[#102A4F]/64 text-[#E9EEF7] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white text-[#334155]"
           }`}
         >
           <ShieldCheck
@@ -98,7 +98,7 @@ export function NextMoveCard({
       <div className="mt-4 flex flex-wrap gap-2">
         {primaryActionLabel === "Move funds" ? (
           <Link
-            href="/move-funds"
+            href="/payments/make-payment"
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition ${
               dark
                 ? "bg-white text-[#121417] hover:bg-[#F4F6FB]"
@@ -128,7 +128,7 @@ export function NextMoveCard({
             type="button"
             className={`inline-flex items-center rounded-full border px-4 py-2 text-[12px] font-semibold transition ${
               dark
-                ? "border-white/12 bg-white/[0.04] text-white hover:bg-white/[0.08]"
+                ? "border-white/16 bg-[#173D6D]/66 text-white hover:bg-[#1E4A7D]"
                 : "border-[rgba(18,20,23,0.08)] bg-white text-[#121417] hover:bg-[#F8F6F1]"
             }`}
             data-action-id={secondaryActionLabel.toLowerCase().replace(/\s+/g, "-")}
@@ -147,7 +147,7 @@ export function NextMoveCard({
       {showSafetyNetSupport && canUseSafetyNet && showSafetyNetAction ? (
         <div
           className={`mt-4 rounded-[14px] px-3 py-3 ${
-            dark ? "bg-white/[0.04] text-[#E9EEF7]" : "bg-white text-[#334155]"
+            dark ? "border border-white/14 bg-[#102A4F]/64 text-[#E9EEF7] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" : "bg-white text-[#334155]"
           }`}
         >
           {safetyNetShortfallText ? (
@@ -161,7 +161,7 @@ export function NextMoveCard({
             }}
             className={`mt-3 inline-flex items-center rounded-full border px-4 py-2 text-[12px] font-semibold transition ${
               dark
-                ? "border-white/12 bg-white/[0.04] text-white hover:bg-white/[0.08]"
+                ? "border-white/16 bg-[#173D6D]/66 text-white hover:bg-[#1E4A7D]"
                 : "border-[rgba(18,20,23,0.08)] bg-[#F8F6F1] text-[#121417] hover:bg-[#F1EEE8]"
             }`}
             data-action-id="cover-with-safety-net"
@@ -181,7 +181,7 @@ export function NextMoveCard({
         <div
           className={`mt-4 rounded-[16px] border px-4 py-4 ${
             dark
-              ? "border-white/10 bg-white/[0.05] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              ? "border-white/16 bg-[#102A4F]/64 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
               : "border-[rgba(18,20,23,0.07)] bg-white"
           }`}
         >

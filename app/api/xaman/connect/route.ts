@@ -8,6 +8,10 @@ export async function POST(request: Request) {
   try {
     const xaman = getXamanClient();
     const origin = new URL(request.url).origin;
+    const body = (await request.json().catch(() => ({}))) as {
+      returnPath?: string;
+    };
+    const returnPath = body.returnPath?.startsWith("/") ? body.returnPath : "/wallet";
     const payload = await xaman.payload?.create({
       txjson: {
         TransactionType: "SignIn",
@@ -15,8 +19,8 @@ export async function POST(request: Request) {
       options: {
         force_network: "MAINNET",
         return_url: {
-          app: `${origin}/wallet?payload={id}`,
-          web: `${origin}/wallet?payload={id}`,
+          app: `${origin}${returnPath}?payload={id}`,
+          web: `${origin}${returnPath}?payload={id}`,
         },
       },
       custom_meta: {

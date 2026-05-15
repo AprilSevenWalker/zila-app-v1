@@ -1,10 +1,14 @@
+import { Suspense } from "react";
+
 import { AppShell } from "@/components/ui/AppShell";
-import { MakePaymentScreen } from "@/components/payments/MakePaymentScreen";
+import { SendMoneyScreen } from "@/components/payments/SendMoneyScreen";
 
 export default function MakePaymentPage() {
   return (
     <AppShell>
-      <MakePaymentScreen />
+      <Suspense fallback={null}>
+        <SendMoneyScreen />
+      </Suspense>
     </AppShell>
   );
 }

@@ -4,8 +4,10 @@ import { CapitalCard } from "@/components/home/CapitalCard";
 import { HomeCommandBar } from "@/components/home/HomeCommandBar";
 import { InsightCard } from "@/components/home/InsightCard";
 import { AttentionPanel } from "@/components/home/AttentionPanel";
+import { ActiveFocusCard } from "@/components/home/ActiveFocusCard";
 import { BusinessList } from "@/components/home/BusinessList";
 import { DesktopHomeScreen } from "@/components/home/DesktopHomeScreen";
+import { ProjectCarousel } from "@/components/home/ProjectCarousel";
 import { AppShell } from "@/components/ui/AppShell";
 
 export default function HomePage() {
@@ -33,13 +35,21 @@ export default function HomePage() {
               <AttentionPanel />
             </div>
 
-            <div className="space-y-4 pt-1">
-              <div className="opacity-[0.94]">
-                <InsightCard />
-              </div>
+            <div className="opacity-[0.97]">
+              <ActiveFocusCard />
+            </div>
 
+            <div className="opacity-[0.97]">
+              <ProjectCarousel />
+            </div>
+
+            <div className="space-y-4 pt-1">
               <div className="opacity-[0.96]">
                 <BusinessList />
+              </div>
+
+              <div className="opacity-[0.94]">
+                <InsightCard />
               </div>
             </div>
           </div>
