@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       },
       custom_meta: {
         identifier: "zila-connect-money",
-        instruction: "Connect your money source to continue in Zila.",
+        instruction: "Approve connection in Xaman so Zila can coordinate payouts securely.",
       },
     });
 
@@ -34,12 +34,18 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
+      uuid: payload.uuid,
+      deeplink: payload.next.always,
+      qr_png: payload.refs.qr_png,
+      websocket_status: payload.refs.websocket_status,
+      status: "created",
       id: payload.uuid,
       url: payload.next.always,
       qrPng: payload.refs.qr_png,
       websocketStatus: payload.refs.websocket_status,
     });
   } catch (error) {
+    console.error("POST /api/xaman/connect failed", error);
     const message = error instanceof Error ? error.message : "Unable to create Xaman connection request.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

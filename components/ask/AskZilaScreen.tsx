@@ -34,6 +34,7 @@ import {
 import { saveAskOperationalUpdate } from "@/lib/askOperationalStore";
 
 type FlowType = "cost-increase" | "payment-recorded" | "supplier-check" | "decision-question";
+type ImpactLevel = "Minor" | "Medium" | "High";
 
 interface InterpretationItem {
   label: string;
@@ -57,16 +58,39 @@ interface FlowData {
   needsAmountClarification?: boolean;
   impactedProject: string;
   pressureLevel: "Low" | "Watch" | "High";
+  impactLevel: ImpactLevel;
   reserveImpact: string;
   operationalConsequence: string;
   actionLabels: string[];
 }
 
 const prompts = [
-  "Supplier cost increased by $2k on Project Horizon.",
-  "Client payment delayed for Atlas Project.",
-  "Received $5k from client for Project Horizon.",
+  "Can we still pay Northline?",
+  "Which projects are under pressure?",
+  "How did this payout affect reserves?",
+  "Generate investor proof package.",
+  "Client delayed payment",
 ];
+
+const operationalFocus = [
+  {
+    label: "Reserve",
+    title: "Northline payout can settle without drawing protected reserve.",
+    state: "Healthy",
+  },
+  {
+    label: "Payouts",
+    title: "1 supplier payout due Friday.",
+    state: "Scheduled",
+  },
+  {
+    label: "Pressure",
+    title: "Project Horizon is the only watch point.",
+    state: "Watch",
+  },
+];
+
+const liveSystemStates = ["Operations updating", "Reserve recalculating", "Proof record syncing", "Cashflow impact recalculated"];
 
 function extractAmount(input: string) {
   const match = input.match(/([£$])?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s?(k|thousand)?/i);
@@ -88,6 +112,60 @@ function extractAmount(input: string) {
     currency,
     numericValue,
     formatted: `${currency || "$"}${numericValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+  };
+}
+
+function getImpactLevel(numericValue: number): ImpactLevel {
+  if (numericValue <= 100) {
+    return "Minor";
+  }
+
+  if (numericValue < 1800) {
+    return "Medium";
+  }
+
+  return "High";
+}
+
+function getCostImpactCopy(project: string, amountText: string, impactLevel: ImpactLevel) {
+  if (impactLevel === "Minor") {
+    return {
+      headline: "Minor expense increase recorded.",
+      guidance: `${project} updated successfully. Operating range adjusted slightly.`,
+      memory: "Small expenses are recorded without creating operational pressure.",
+      reserveImpact: "Reserve impact minimal. Protected money does not need to move.",
+      consequence: "Operating range adjusted slightly.",
+      pressure: "Low" as const,
+      actions: ["Record only"],
+      nextPrimary: "Record update",
+      nextFallback: "No money movement needed",
+    };
+  }
+
+  if (impactLevel === "Medium") {
+    return {
+      headline: "Operating cushion reduced.",
+      guidance: `${amountText} has been added to ${project}. Cash coordination adjusted.`,
+      memory: "Medium cost changes can tighten the operating range if more supplier activity lands this week.",
+      reserveImpact: "Reserve threshold tightening. Review again if another commitment lands.",
+      consequence: "Cash coordination adjusted.",
+      pressure: "Watch" as const,
+      actions: ["Record only", "Protect money"],
+      nextPrimary: "Keep reserve under watch",
+      nextFallback: "Protect money if costs keep climbing",
+    };
+  }
+
+  return {
+    headline: `${project} is approaching a funding pressure point.`,
+    guidance: `${amountText} materially reduces the operating range. Zila prepared a safer next move.`,
+    memory: "Supplier-heavy weeks usually reduce your safe range before delivery completes.",
+    reserveImpact: "Upcoming payout may affect reserve stability.",
+    consequence: "Operational pressure increasing.",
+    pressure: "High" as const,
+    actions: ["Move funds", "Protect money", "Record only"],
+    nextPrimary: "Move funds to protect the week",
+    nextFallback: "Delay noncritical payout until cash lands",
   };
 }
 
@@ -121,6 +199,7 @@ function createAmountClarificationFlow(detectedLabel: string): FlowData {
     needsAmountClarification: true,
     impactedProject: "Project Horizon",
     pressureLevel: "Watch",
+    impactLevel: "Medium",
     reserveImpact: "Waiting for amount before reserve impact can be calculated.",
     operationalConsequence: "Zila needs the amount before updating the operating record.",
     actionLabels: ["Record commitment", "Create reserve"],
@@ -229,6 +308,7 @@ function createOperationalContextFlow(input: {
     needsAmountClarification: false,
     impactedProject: input.project,
     pressureLevel: input.pressure,
+    impactLevel: input.pressure === "High" ? "High" : input.pressure === "Watch" ? "Medium" : "Minor",
     reserveImpact: input.reserveImpact,
     operationalConsequence: input.consequence,
     actionLabels: input.actions,
@@ -270,12 +350,72 @@ function getFlowData(input: string): FlowData {
     lower.includes("paid") ||
     lower.includes("spent") ||
     lower.includes("cost") ||
+    lower.includes("expense") ||
+    lower.includes("food") ||
+    lower.includes("bought") ||
     lower.includes("payment");
   const decisionQuestion =
     lower.includes("can i") ||
+    lower.includes("can we") ||
     lower.includes("should i") ||
     lower.includes("am i") ||
     lower.includes("what happens");
+
+  if (lower.includes("northline")) {
+    return createOperationalContextFlow({
+      project: "Project Horizon",
+      detected: "Northline payout due Friday",
+      headline: "Yes. The Northline payout can be safely coordinated.",
+      guidance: "Stablecoin settlement is ready, the supplier reserve remains protected, and proof will attach automatically after confirmation.",
+      memory: "Zila linked the supplier obligation, reserve state, and payment route before recommending execution.",
+      reserveImpact: "Protected reserve remains above threshold after payout.",
+      consequence: "Supplier obligation clears without weakening next week's operating range.",
+      pressure: "Watch",
+      actions: ["Send payment", "Review reserve", "Generate proof"],
+    });
+  }
+
+  if (lower.includes("under pressure") || lower.includes("pressure")) {
+    return createOperationalContextFlow({
+      project: "Portfolio",
+      detected: "Project pressure check",
+      headline: "Project Horizon is the only active watch point.",
+      guidance: "Northline Suppliers are due Friday. Atlas and Northstar remain inside their current operating ranges.",
+      memory: "Supplier timing is the main pressure source this week.",
+      reserveImpact: "Reserve protection remains active across upcoming obligations.",
+      consequence: "One coordinated payout should keep the portfolio stable.",
+      pressure: "Watch",
+      actions: ["Open Payments", "Review Projects", "Generate proof"],
+    });
+  }
+
+  if (lower.includes("affect reserves") || lower.includes("affected reserves") || lower.includes("reserve")) {
+    return createOperationalContextFlow({
+      project: "Project Horizon",
+      detected: "Reserve impact check",
+      headline: "The payout does not draw down protected reserve.",
+      guidance: "After the Northline payout, the supplier reserve remains protected and runway stays inside the current operating range.",
+      memory: "Zila keeps payout routing separate from money reserved for upcoming obligations.",
+      reserveImpact: "Protected balance remains at $24,220 before settlement.",
+      consequence: "Treasury remains stable after payment coordination.",
+      pressure: "Low",
+      actions: ["Review payout", "Open Proof", "Record update"],
+    });
+  }
+
+  if (lower.includes("proof package") || lower.includes("investor")) {
+    return createOperationalContextFlow({
+      project: "Portfolio",
+      detected: "Investor proof package",
+      headline: "Investor proof package is ready to generate.",
+      guidance: "Zila will use supplier payouts, reserve movements, settlement records, and project updates from operational memory.",
+      memory: "Proof is generated from activity already recorded across Projects and Payments.",
+      reserveImpact: "Reserve protection, payout timing, and verified settlement records will be included.",
+      consequence: "External evidence package can be shared without rebuilding the history manually.",
+      pressure: "Low",
+      actions: ["Open Proof", "Review timeline", "Record update"],
+    });
+  }
 
   if (isHiring && !amountText) {
     return createOperationalContextFlow({
@@ -361,6 +501,7 @@ function getFlowData(input: string): FlowData {
       needsAmountClarification: false,
       impactedProject: project,
       pressureLevel: answerLabel === "Yes" ? "Low" : answerLabel === "No" ? "High" : "Watch",
+      impactLevel: answerLabel === "Yes" ? "Minor" : answerLabel === "No" ? "High" : "Medium",
       reserveImpact: answerLabel === "Yes" ? "No reserve movement needed." : "Protected money may need a timing buffer.",
       operationalConsequence: answerLabel === "Yes" ? "Decision stays inside your current safe range." : "The project may create pressure before incoming money lands.",
       actionLabels: ["Send payment", "Move funds", "Record commitment"],
@@ -392,6 +533,7 @@ function getFlowData(input: string): FlowData {
       needsAmountClarification: false,
       impactedProject: project,
       pressureLevel: "Low",
+      impactLevel: "Minor",
       reserveImpact: "No reserve used. Available operating balance increases.",
       operationalConsequence: "Safe to Spend improves after this payment is recorded.",
       actionLabels: ["Protect money", "Create reserve", "Adjust project allocation"],
@@ -420,6 +562,7 @@ function getFlowData(input: string): FlowData {
       needsAmountClarification: false,
       impactedProject: project,
       pressureLevel: "Watch",
+      impactLevel: "Medium",
       reserveImpact: "Supplier or payroll reserve may need more cover.",
       operationalConsequence: "Upcoming commitments should be watched until the delayed money lands.",
       actionLabels: ["Record commitment", "Create reserve", "Protect money"],
@@ -431,53 +574,58 @@ function getFlowData(input: string): FlowData {
       return createAmountClarificationFlow("Payment or spend update");
     }
 
-    const nextMove = lower.includes("cost")
-      ? getCostNextMove(extractedAmount.numericValue, extractedAmount.currency)
+    const isCostLike =
+      lower.includes("cost") ||
+      lower.includes("expense") ||
+      lower.includes("spent") ||
+      lower.includes("food") ||
+      lower.includes("bought");
+    const impactLevel = getImpactLevel(amountValue);
+    const impactCopy = isCostLike ? getCostImpactCopy(project, amountText, impactLevel) : null;
+    const nextMove = isCostLike
+      ? impactLevel === "High"
+        ? getCostNextMove(extractedAmount.numericValue, extractedAmount.currency)
+        : { primary: impactCopy?.nextPrimary ?? "Record update", fallback: impactCopy?.nextFallback ?? "No immediate action needed" }
       : getPaymentNextMove(extractedAmount.numericValue, extractedAmount.currency);
 
     return {
       type: "payment-recorded",
       interpretation: [
-        { label: "Got it", value: "Project Horizon" },
+        { label: "Got it", value: project },
         {
           label: "Detected",
-          value: lower.includes("cost") ? "Cost or payment update" : "Payment recorded",
+          value: isCostLike ? "Expense update" : "Payment recorded",
         },
         { label: "Amount", value: amountText },
       ],
-      guidanceHeadline: lower.includes("cost")
-        ? "Project Horizon is approaching a funding pressure point this week."
-        : "This payment can be absorbed cleanly today.",
-      guidanceText: lower.includes("cost")
-        ? "A small adjustment now keeps the project steady and updates the next move clearly."
-        : "Your week stays steady, and recording it now keeps the project view accurate.",
-      memoryPattern: lower.includes("cost")
-        ? "Supplier-heavy weeks usually reduce your safe range before delivery completes."
-        : "This project typically creates payment pressure near delivery, so the record strengthens the next forecast.",
+      guidanceHeadline: impactCopy?.headline ?? "This payment can be absorbed cleanly today.",
+      guidanceText: impactCopy?.guidance ?? "Your week stays steady, and recording it now keeps the project view accurate.",
+      memoryPattern: impactCopy?.memory ?? "This project typically creates payment pressure near delivery, so the record strengthens the next forecast.",
       applySteps: [
-        lower.includes("cost") ? "Update project costs" : "Record payment",
+        isCostLike ? "Update project costs" : "Record payment",
         "Refresh project outlook",
         "Update next move recommendation",
       ],
       completionLines: [
         "All done",
-        "Project Horizon updated",
-        lower.includes("cost") ? `${amountText} cost change recorded` : `${amountText} payment recorded`,
+        `${project} updated`,
+        isCostLike ? `${amountText} expense recorded` : `${amountText} payment recorded`,
         "Next move prepared",
       ],
       nextActionPrimary: nextMove.primary,
       nextActionFallback: nextMove.fallback,
-      proofText: lower.includes("cost")
-        ? `Recorded. Cost increase of ${amountText} added to Project Horizon. Time stamped and added to verified history.`
-        : `Recorded. Payment of ${amountText} added to Project Horizon. Time stamped and added to verified history.`,
+      proofText: isCostLike
+        ? `Recorded. Expense update of ${amountText} added to ${project}. Time stamped and added to verified history.`
+        : `Recorded. Payment of ${amountText} added to ${project}. Time stamped and added to verified history.`,
       detectedAmount: amountText,
       detectedAmountValue: amountValue,
       needsAmountClarification: false,
       impactedProject: project,
-      pressureLevel: lower.includes("cost") && amountValue >= 1800 ? "High" : "Watch",
-      reserveImpact: lower.includes("cost") ? "Supplier reserve should be reviewed before the next payment." : "No reserve change unless this payment should be matched against protected money.",
-      operationalConsequence: lower.includes("cost") ? "This reduces your available operating cushion." : "Project activity is updated and the operating record stays aligned.",
-      actionLabels: lower.includes("cost") ? ["Create reserve", "Protect money", "Move funds"] : ["Send payment", "Record commitment"],
+      pressureLevel: impactCopy?.pressure ?? "Watch",
+      impactLevel: isCostLike ? impactLevel : "Minor",
+      reserveImpact: impactCopy?.reserveImpact ?? "No reserve change unless this payment should be matched against protected money.",
+      operationalConsequence: impactCopy?.consequence ?? "Project activity is updated and the operating record stays aligned.",
+      actionLabels: impactCopy?.actions ?? ["Send payment", "Record commitment"],
     };
   }
 
@@ -518,6 +666,7 @@ function getFlowData(input: string): FlowData {
       needsAmountClarification: false,
       impactedProject: project,
       pressureLevel: amountValue >= 2500 ? "Watch" : "Low",
+      impactLevel: amountValue >= 2500 ? "Medium" : "Minor",
       reserveImpact: "Supplier Reserve can absorb this if you want to avoid reducing available balance.",
       operationalConsequence: "Delivery stays steady, with a narrower safe range for the next few days.",
       actionLabels: ["Send payment", "Protect money", "Move funds"],
@@ -528,18 +677,23 @@ function getFlowData(input: string): FlowData {
     return createAmountClarificationFlow("Cost increase");
   }
 
-  const nextMove = getCostNextMove(extractedAmount.numericValue, extractedAmount.currency);
+  const impactLevel = getImpactLevel(amountValue);
+  const impactCopy = getCostImpactCopy(project, amountText, impactLevel);
+  const nextMove =
+    impactLevel === "High"
+      ? getCostNextMove(extractedAmount.numericValue, extractedAmount.currency)
+      : { primary: impactCopy.nextPrimary, fallback: impactCopy.nextFallback };
 
   return {
     type: "cost-increase",
     interpretation: [
-      { label: "Got it", value: "Project Horizon" },
-      { label: "Detected", value: "Cost increase" },
+      { label: "Got it", value: project },
+      { label: "Detected", value: "Expense update" },
       { label: "Amount", value: amountText },
     ],
-    guidanceHeadline: "Project Horizon is approaching a funding pressure point this week.",
-    guidanceText: `A small adjustment around ${amountText} now keeps everything on track for the week ahead.`,
-    memoryPattern: "Zila recognised a similar pressure pattern from last month.",
+    guidanceHeadline: impactCopy.headline,
+    guidanceText: impactCopy.guidance,
+    memoryPattern: impactCopy.memory,
     applySteps: [
       "Update project costs",
       "Refresh project outlook",
@@ -547,21 +701,22 @@ function getFlowData(input: string): FlowData {
     ],
     completionLines: [
       "All done",
-      "Project Horizon updated",
-      `${amountText} cost increase recorded`,
+      `${project} updated`,
+      `${amountText} expense recorded`,
       "Next move prepared",
     ],
     nextActionPrimary: nextMove.primary,
     nextActionFallback: nextMove.fallback,
-    proofText: `Recorded. Cost increase of ${amountText} added to Project Horizon. Time stamped and added to verified history.`,
+    proofText: `Recorded. Expense update of ${amountText} added to ${project}. Time stamped and added to verified history.`,
     detectedAmount: amountText,
     detectedAmountValue: amountValue,
     needsAmountClarification: false,
     impactedProject: project,
-    pressureLevel: amountValue >= 1800 ? "High" : "Watch",
-    reserveImpact: "Supplier reserve should be increased or created.",
-    operationalConsequence: "This reduces your available operating cushion.",
-    actionLabels: ["Create reserve", "Protect money", "Record commitment"],
+    pressureLevel: impactCopy.pressure,
+    impactLevel,
+    reserveImpact: impactCopy.reserveImpact,
+    operationalConsequence: impactCopy.consequence,
+    actionLabels: impactCopy.actions,
   };
 }
 
@@ -572,13 +727,13 @@ export function AskZilaScreen() {
   const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyStageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [query, setQuery] = useState(prompts[0]);
-  const [activePrompt, setActivePrompt] = useState(prompts[0]);
-  const [submittedMessage, setSubmittedMessage] = useState(prompts[0]);
+  const [query, setQuery] = useState("");
+  const [activePrompt, setActivePrompt] = useState<string | null>(null);
+  const [submittedMessage, setSubmittedMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-  const [hasResponse, setHasResponse] = useState(true);
-  const [visibleSteps, setVisibleSteps] = useState(3);
+  const [hasResponse, setHasResponse] = useState(false);
+  const [visibleSteps, setVisibleSteps] = useState(0);
   const [hasApplied, setHasApplied] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [applyStage, setApplyStage] = useState<"idle" | "applying" | "updating">("idle");
@@ -637,6 +792,22 @@ export function AskZilaScreen() {
     setApplyStage("idle");
     setConfirmedAction(null);
     setRecordedProofReference(null);
+  };
+
+  const clearWorkspace = () => {
+    if (thinkingTimeoutRef.current) {
+      clearTimeout(thinkingTimeoutRef.current);
+    }
+    if (revealTimeoutRef.current) {
+      clearTimeout(revealTimeoutRef.current);
+    }
+    setQuery("");
+    setActivePrompt(null);
+    setSubmittedMessage("");
+    setIsThinking(false);
+    setHasResponse(false);
+    setVisibleSteps(0);
+    resetExecutionState();
   };
 
   const recordOperationalUpdate = () => {
@@ -749,8 +920,14 @@ export function AskZilaScreen() {
 
         revealTimeoutRef.current = setTimeout(() => {
           setVisibleSteps(3);
-        }, 300);
-      }, 300);
+          revealTimeoutRef.current = setTimeout(() => {
+            setVisibleSteps(4);
+            revealTimeoutRef.current = setTimeout(() => {
+              setVisibleSteps(5);
+            }, 380);
+          }, 380);
+        }, 380);
+      }, 420);
     }, 1400);
   };
 
@@ -778,6 +955,7 @@ export function AskZilaScreen() {
 
   const handlePrompt = (prompt: string) => {
     setQuery(prompt);
+    setActivePrompt(prompt);
     submitMessage(prompt);
   };
 
@@ -809,12 +987,27 @@ export function AskZilaScreen() {
       availableBalanceLabel: "$42,300",
     });
 
-    router.push("/payments/make-payment");
+    router.push("/payments/choose-method");
   };
 
   const handleActionCta = (label: string) => {
     if (label === "Send payment" || label === "Move funds") {
       handleMoveFunds();
+      return;
+    }
+
+    if (label === "Open Payments" || label === "Review payout") {
+      router.push("/payments/choose-method");
+      return;
+    }
+
+    if (label === "Open Proof" || label === "Generate proof" || label === "Review timeline") {
+      router.push("/proof");
+      return;
+    }
+
+    if (label === "Review Projects") {
+      router.push("/projects");
       return;
     }
 
@@ -841,30 +1034,58 @@ export function AskZilaScreen() {
           : null;
 
   const operationalStatusClasses =
-    "border-[#67E8F9]/30 bg-[linear-gradient(180deg,rgba(103,232,249,0.16),rgba(255,255,255,0.07))] text-[#E8FCFF] shadow-[0_0_24px_rgba(103,232,249,0.10),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl";
+    "border-[#D9FF57]/24 bg-[linear-gradient(180deg,rgba(217,255,87,0.11),rgba(255,255,255,0.055))] text-[#F1FFB8] shadow-[0_0_24px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl";
 
-  const isProjectHorizonExample = submittedMessage === prompts[0];
+  const isProjectHorizonExample = false;
   const displayedSafeBefore = isProjectHorizonExample ? 41200 : safeBefore;
   const displayedSafeAfter = isProjectHorizonExample ? 39200 : safeAfter;
   const safeDelta = Math.abs(displayedSafeAfter - displayedSafeBefore);
   const safeDeltaLabel = `${isIncomingUpdate ? "+" : "-"}$${safeDelta.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   const hasConversation = Boolean(submittedMessage);
   const responseVisible = hasConversation && hasResponse && !isThinking;
-  const shouldShowReaction = responseVisible && visibleSteps >= 1;
-  const shouldShowAction = responseVisible && visibleSteps >= 2;
-  const shouldShowProof = responseVisible && visibleSteps >= 3;
+  const shouldShowReaction = responseVisible && visibleSteps >= 2;
+  const shouldShowReserve = responseVisible && visibleSteps >= 3;
+  const shouldShowAction = responseVisible && visibleSteps >= 4;
+  const shouldShowProof = responseVisible && visibleSteps >= 5;
+  const cashflowTitle =
+    flow.impactLevel === "Minor"
+      ? "Operating range adjusted slightly"
+      : flow.impactLevel === "Medium"
+        ? "Operating cushion reduced"
+        : "Funding pressure detected";
+  const reserveTitle =
+    flow.impactLevel === "Minor"
+      ? "Reserve impact minimal"
+      : flow.impactLevel === "Medium"
+        ? "Reserve threshold tightening"
+        : "Reserve stability checked";
+  const recommendationLabel =
+    flow.impactLevel === "Minor"
+      ? "Recorded guidance"
+      : flow.impactLevel === "Medium"
+        ? "Recommended next move"
+        : "Action recommended";
+  const visibleActionLabels = flow.actionLabels.length ? flow.actionLabels.slice(0, 3) : ["Record only"];
+  const responseToneClass =
+    flow.impactLevel === "High"
+      ? "border-[#FBBF24]/14 bg-[linear-gradient(180deg,rgba(251,191,36,0.075),rgba(255,255,255,0.055))] shadow-[0_22px_54px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.10)]"
+      : "border-white/12 bg-white/[0.07] shadow-[0_22px_54px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.10)]";
+  const impactToneClass =
+    flow.impactLevel === "High"
+      ? "border-[#FBBF24]/16 bg-[linear-gradient(180deg,rgba(251,191,36,0.09),rgba(255,255,255,0.05))] shadow-[0_18px_46px_rgba(251,191,36,0.04)]"
+      : "border-[#67E8F9]/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.13),rgba(255,255,255,0.06))] shadow-[0_18px_46px_rgba(103,232,249,0.08)]";
 
   return (
     <AppShell>
-      <div className="relative -mx-4 -mt-2 min-h-[calc(100vh-7rem)] overflow-hidden bg-[radial-gradient(ellipse_at_18%_0%,rgba(255,255,255,0.78),transparent_30%),radial-gradient(ellipse_at_82%_4%,rgba(103,232,249,0.22),transparent_28%),linear-gradient(180deg,#DCEEFF_0%,#C9DFF8_48%,#A8C9ED_100%)] px-4 pb-24 pt-4 text-[#10233F] md:-mx-6 md:rounded-[36px] md:px-7 md:pb-12 md:pt-6 lg:-mx-8 lg:px-9">
+      <div className="relative -mx-4 -mt-2 min-h-[calc(100vh-6rem)] overflow-hidden bg-[radial-gradient(ellipse_at_18%_0%,rgba(255,255,255,0.78),transparent_30%),radial-gradient(ellipse_at_82%_4%,rgba(103,232,249,0.22),transparent_28%),linear-gradient(180deg,#DCEEFF_0%,#C9DFF8_48%,#A8C9ED_100%)] px-4 pb-20 pt-4 text-[#10233F] md:-mx-6 md:rounded-[32px] md:px-6 md:pb-10 md:pt-5 lg:-mx-7 lg:px-7">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.32),transparent_38%,rgba(29,78,216,0.055)_72%,transparent)]" />
         <div className="pointer-events-none absolute left-1/2 top-20 h-[40rem] w-[40rem] -translate-x-1/2 rounded-full bg-[#67E8F9]/10 blur-3xl" />
 
-        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-9rem)] max-w-[1060px] flex-col">
+        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-8rem)] max-w-[1020px] flex-col">
           <div className="flex flex-wrap items-center justify-between gap-3 px-1">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#1D4ED8]">Ask Zila</p>
-              <h1 className="mt-2 text-[28px] font-semibold leading-none tracking-[-0.045em] text-[#10233F] md:text-[36px]">
+              <h1 className="mt-2 text-[27px] font-semibold leading-none tracking-[-0.045em] text-[#10233F] md:text-[32px]">
                 Tell Zila what changed.
               </h1>
             </div>
@@ -882,55 +1103,119 @@ export function AskZilaScreen() {
             </div>
           </div>
 
-          <section className="mt-5 flex flex-1 flex-col overflow-hidden rounded-[32px] border border-[#17345F]/18 bg-[linear-gradient(180deg,#183B6A_0%,#10233F_50%,#081525_100%)] text-white shadow-[0_34px_90px_rgba(16,35,63,0.34),inset_0_1px_0_rgba(255,255,255,0.16)]">
-            <div className="relative flex min-h-[680px] flex-1 flex-col px-4 py-5 md:px-7 md:py-7">
+          <section className="mt-4 flex flex-1 flex-col overflow-hidden rounded-[28px] border border-[#17345F]/18 bg-[linear-gradient(180deg,#183B6A_0%,#10233F_50%,#081525_100%)] text-white shadow-[0_30px_78px_rgba(16,35,63,0.30),inset_0_1px_0_rgba(255,255,255,0.16)]">
+            <div className="relative flex min-h-[600px] flex-1 flex-col px-4 py-5 md:px-6 md:py-6">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_50%_0%,rgba(103,232,249,0.20),transparent_62%)]" />
               <div className="pointer-events-none absolute inset-x-8 top-24 h-px bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.42),transparent)]" />
 
-              <div className="relative flex items-start justify-between gap-4">
+              <div className="relative flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#7EE7F6]">Live operational conversation</p>
-                  <p className="mt-2 max-w-[640px] text-[22px] font-semibold leading-[1.14] tracking-[-0.04em] text-white md:text-[30px]">
-                    Speak once. Zila updates money, projects, actions, and proof.
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#7EE7F6]">Operational intelligence layer</p>
+                  <p className="mt-2 max-w-[640px] text-[21px] font-semibold leading-[1.14] tracking-[-0.04em] text-white md:text-[27px]">
+                    Tell Zila what changed.
+                  </p>
+                  <p className="mt-3 max-w-[660px] text-[14px] leading-[1.7] text-[#D7E3F8]">
+                    Update projects, payouts, reserves, operational pressure, and proof records in real time.
                   </p>
                 </div>
-                <span className={`hidden items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] md:inline-flex ${operationalStatusClasses}`}>
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#67E8F9] shadow-[0_0_12px_rgba(103,232,249,0.36)]">
-                    <span className="insight-signal-ripple absolute inset-0 rounded-full bg-[#67E8F9]" />
+                <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] ${operationalStatusClasses}`}>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[#D9FF57] shadow-[0_0_12px_rgba(217,255,87,0.36)]">
+                    <span className="insight-signal-ripple absolute inset-0 rounded-full bg-[#D9FF57]" />
                   </span>
-                  Operations updating
+                  {isThinking ? "Operations updating" : "Ready for update"}
                 </span>
+              </div>
+
+              <div className="relative mt-5 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-white/[0.045] px-4 py-3">
+                <div className="flex flex-wrap gap-2">
+                  {["New operational update", "Recent updates", "Operational history"].map((label) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={label === "New operational update" ? clearWorkspace : undefined}
+                      className="rounded-full border border-white/10 bg-[#071526]/34 px-3 py-2 text-[11px] font-semibold text-[#D7E3F8] transition hover:border-[#D9FF57]/20 hover:bg-[#D9FF57]/[0.065] hover:text-white"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={clearWorkspace}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] font-semibold text-[#AFC0DD] transition hover:bg-white/[0.08] hover:text-white"
+                >
+                  Clear workspace
+                </button>
               </div>
 
               <div className="relative mt-6 flex-1 overflow-y-auto pb-4 pr-0 md:pr-2">
                 <div className="mx-auto max-w-[820px] space-y-6">
                   {!hasConversation ? (
-                    <div className="pt-6 md:pt-10">
-                      <div className="max-w-[620px] rounded-[28px] border border-white/12 bg-white/[0.07] p-5 shadow-[0_24px_58px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.10)]">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7EE7F6]">Zila</p>
-                        <p className="mt-3 text-[25px] font-semibold leading-[1.14] tracking-[-0.045em] text-white md:text-[34px]">
-                          Tell me what changed. I&apos;ll update money, projects, next moves, and proof in one flow.
-                        </p>
-                        <p className="mt-4 text-[15px] leading-[1.75] text-[#D7E3F8]">
-                          Speak naturally, type a quick update, or upload a document. The operating response will appear here as it is generated.
-                        </p>
+                    <div className="pt-3 md:pt-6">
+                      <div className="rounded-[30px] border border-white/12 bg-white/[0.06] p-5 shadow-[0_24px_58px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.10)] md:p-6">
+                        <div className="flex flex-wrap items-start justify-between gap-5">
+                          <div className="max-w-[560px]">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7EE7F6]">Live workspace</p>
+                            <p className="mt-3 text-[25px] font-semibold leading-[1.14] tracking-[-0.045em] text-white md:text-[34px]">
+                              Ready to coordinate the next operational change.
+                            </p>
+                            <p className="mt-4 text-[15px] leading-[1.75] text-[#D7E3F8]">
+                              Speak naturally, type a quick update, or upload a document. Zila will translate the change into project state, money movement, reserve impact, and proof.
+                            </p>
+                          </div>
+                          <div className="grid min-w-[230px] gap-2">
+                            {liveSystemStates.map((state, index) => (
+                              <div key={state} className="flex items-center gap-2 rounded-[16px] border border-white/8 bg-[#071526]/34 px-3 py-2">
+                                <span className={`h-2 w-2 rounded-full ${index === 0 ? "bg-[#D9FF57] zila-live-dot" : "bg-[#67E8F9]/70"}`} />
+                                <p className="text-[11px] font-semibold text-[#D7E3F8]">{state}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="mt-6 flex flex-wrap gap-2">
+                      <div className="mt-6">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#AFC0FF]">Suggested operational updates</p>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
                         {prompts.map((prompt) => (
                           <button
                             key={prompt}
                             type="button"
                             onClick={() => handlePrompt(prompt)}
-                            className={`rounded-full border px-4 py-2.5 text-left text-[12px] font-semibold transition ${
+                          className={`rounded-full border px-4 py-2.5 text-left text-[12px] font-semibold transition ${
                               activePrompt === prompt
-                                ? "border-[#67E8F9]/28 bg-[#67E8F9]/12 text-white"
-                                : "border-white/10 bg-white/[0.05] text-[#D7E3F8] hover:bg-white/[0.08]"
+                                ? "border-[#D9FF57]/26 bg-[#D9FF57]/[0.085] text-[#F1FFB8] shadow-[0_0_18px_rgba(217,255,87,0.06)]"
+                                : "border-white/10 bg-white/[0.05] text-[#D7E3F8] hover:border-[#D9FF57]/16 hover:bg-white/[0.08]"
                             }`}
                           >
                             {prompt}
                           </button>
                         ))}
+                      </div>
+
+                      <div className="mt-7 rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(7,21,38,0.42),rgba(255,255,255,0.035))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7EE7F6]">Today&apos;s operational focus</p>
+                            <p className="mt-2 text-[18px] font-semibold tracking-[-0.035em] text-white">Project ranges stable. Reserves active.</p>
+                          </div>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-[#D9FF57]/16 bg-[#D9FF57]/[0.07] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#EAFFB4]">
+                            <span className="zila-live-dot h-1.5 w-1.5 rounded-full bg-[#D9FF57]" />
+                            Live reserve pulse
+                          </span>
+                        </div>
+                        <div className="mt-4 grid gap-2 md:grid-cols-3">
+                          {operationalFocus.map((item) => (
+                            <div key={item.title} className="rounded-[18px] border border-white/8 bg-[#071526]/32 p-3 transition hover:border-[#67E8F9]/18 hover:bg-[#071526]/42">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#8FA4C3]">{item.label}</p>
+                                <span className="rounded-full border border-[#D9FF57]/12 bg-[#D9FF57]/[0.055] px-2 py-0.5 text-[9px] font-semibold text-[#EAFFB4]">{item.state}</span>
+                              </div>
+                              <p className="mt-2 text-[13px] font-semibold leading-[1.5] text-[#EAF4FF]">{item.title}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ) : null}
@@ -952,28 +1237,31 @@ export function AskZilaScreen() {
                   ) : null}
 
                   {hasConversation ? (
-                    <div className="max-w-[680px] rounded-[28px] border border-[#67E8F9]/20 bg-[#67E8F9]/10 p-5 shadow-[0_18px_46px_rgba(103,232,249,0.08)]">
+                    <div
+                      className="zila-flow-step max-w-[680px] rounded-[28px] border border-[#67E8F9]/22 bg-[linear-gradient(180deg,rgba(103,232,249,0.13),rgba(7,21,38,0.22))] p-5 shadow-[0_18px_46px_rgba(103,232,249,0.10),inset_0_1px_0_rgba(255,255,255,0.08)]"
+                      style={{ animationDelay: "40ms" }}
+                    >
                       <div className="flex items-start gap-4">
-                        <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-[#67E8F9]/28 bg-[#67E8F9]/14 text-[#DDFBFF]">
-                          {isThinking ? <span className="insight-signal-ripple absolute h-8 w-8 rounded-full bg-[#67E8F9]" /> : null}
+                        <span className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-[#D9FF57]/22 bg-[#D9FF57]/10 text-[#EAFFB4]">
+                          {isThinking ? <span className="insight-signal-ripple absolute h-8 w-8 rounded-full bg-[#D9FF57]" /> : null}
                           <Activity className="relative h-[19px] w-[19px]" strokeWidth={2} />
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C7F7FF]">Zila</p>
                           <p className="mt-2 text-[22px] font-semibold leading-[1.18] tracking-[-0.04em] text-white">
-                            Understood. Recalculating {flow.impactedProject}&apos;s operating range...
+                            Understood. {isThinking ? `Recalculating ${flow.impactedProject}'s operating range...` : `${flow.impactedProject} is updated.`}
                           </p>
                           <div className="mt-4 flex h-10 items-end gap-1.5">
                             {[12, 26, 18, 34, 24, 30, 16, 28, 20, 32].map((height, index) => (
                               <span
                                 key={`${height}-${index}`}
-                                className={`w-1.5 rounded-full transition-all ${isThinking ? "bg-[#67E8F9]/85" : "bg-[#67E8F9]/38"}`}
+                                className={`w-1.5 rounded-full transition-all ${isThinking ? "bg-[#D9FF57] shadow-[0_0_10px_rgba(217,255,87,0.22)]" : "bg-[#D9FF57]/34"}`}
                                 style={{ height: `${isThinking ? height : Math.max(7, height * 0.38)}px` }}
                               />
                             ))}
                           </div>
                           {!isThinking ? (
-                            <p className="mt-2 text-[12px] font-semibold text-[#C7F7FF]">Operating range recalculated</p>
+                            <p className="mt-2 text-[12px] font-semibold text-[#EAFFB4]">Operating range recalculated</p>
                           ) : null}
                         </div>
                       </div>
@@ -981,7 +1269,10 @@ export function AskZilaScreen() {
                   ) : null}
 
                   {responseVisible ? (
-                    <div className="max-w-[760px] rounded-[30px] border border-white/12 bg-white/[0.07] p-5 shadow-[0_22px_54px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.10)]">
+                    <div
+                      className={`zila-flow-step max-w-[760px] rounded-[30px] p-5 ${responseToneClass}`}
+                      style={{ animationDelay: "70ms" }}
+                    >
                       <div className="flex items-start gap-4">
                         <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-[#D9FF57]/24 bg-[#D9FF57]/14 text-[#EAFFB4]">
                           <Activity className="h-[19px] w-[19px]" strokeWidth={2} />
@@ -1006,11 +1297,14 @@ export function AskZilaScreen() {
                   ) : null}
 
                   {shouldShowReaction ? (
-                    <div className="ml-10 max-w-[650px] rounded-[24px] border border-[#67E8F9]/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.13),rgba(255,255,255,0.06))] p-4 shadow-[0_18px_46px_rgba(103,232,249,0.08)] transition-all">
+                    <div
+                      className={`zila-flow-step ml-10 max-w-[650px] rounded-[24px] p-4 transition-all ${impactToneClass}`}
+                      style={{ animationDelay: "90ms" }}
+                    >
                       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C7F7FF]">Live update</p>
                       <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
                         <div>
-                          <p className="text-[18px] font-semibold text-white">Safe to spend updated</p>
+                          <p className="text-[18px] font-semibold text-white">{cashflowTitle}</p>
                           <p className="mt-2 text-[13px] leading-[1.65] text-[#D7E3F8]">{flow.operationalConsequence}</p>
                         </div>
                         <div className="flex items-center gap-3 rounded-[18px] border border-white/10 bg-[#071526]/34 px-4 py-3">
@@ -1031,41 +1325,54 @@ export function AskZilaScreen() {
                     </div>
                   ) : null}
 
+                  {shouldShowReserve ? (
+                    <div
+                      className="zila-flow-step ml-10 max-w-[610px] rounded-[24px] border border-[#5EEAD4]/18 bg-[linear-gradient(180deg,rgba(94,234,212,0.09),rgba(7,21,38,0.34))] p-4 shadow-[0_18px_42px_rgba(94,234,212,0.05),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
+                      style={{ animationDelay: "110ms" }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-[#67E8F9]/22 bg-[#67E8F9]/10 text-[#DDFBFF]">
+                          <span className="insight-signal-ripple absolute h-6 w-6 rounded-full bg-[#D9FF57]" />
+                          <LockKeyhole className="relative h-[16px] w-[16px]" strokeWidth={2} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#EAFFB4]">Reserve update</p>
+                          <p className="mt-2 text-[20px] font-semibold leading-[1.18] tracking-[-0.04em] text-white">{reserveTitle}</p>
+                          <p className="mt-2 text-[13px] leading-[1.65] text-[#D7E3F8]">{flow.reserveImpact}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {shouldShowAction ? (
-                    <div className="ml-10 max-w-[610px] rounded-[24px] border border-white/12 bg-white/[0.08] p-4 transition-all">
+                    <div
+                      className="zila-flow-step ml-10 max-w-[610px] rounded-[24px] border border-[#D9FF57]/16 bg-[linear-gradient(180deg,rgba(217,255,87,0.08),rgba(7,21,38,0.44))] p-4 shadow-[0_18px_44px_rgba(217,255,87,0.06),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
+                      style={{ animationDelay: "130ms" }}
+                    >
                       <div className="flex items-start gap-3">
                         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-[#D9FF57]/24 bg-[#D9FF57]/14 text-[#EAFFB4]">
                           <LockKeyhole className="h-[16px] w-[16px]" strokeWidth={2} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#AFC0FF]">Recommended</p>
-                          <p className="mt-2 text-[22px] font-semibold leading-[1.18] tracking-[-0.04em] text-white">Move $4,300 to stabilize {flow.impactedProject}.</p>
-                          <p className="mt-2 text-[13px] leading-[1.65] text-[#D7E3F8]">{flow.reserveImpact}</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D9FF57]">{recommendationLabel}</p>
+                          <p className="mt-2 text-[22px] font-semibold leading-[1.18] tracking-[-0.04em] text-white">{flow.nextActionPrimary}</p>
+                          <p className="mt-2 text-[13px] leading-[1.65] text-[#D7E3F8]">{flow.nextActionFallback}</p>
                           <div className="mt-4 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={handleMoveFunds}
-                              disabled={Boolean(flow.needsAmountClarification)}
-                              className="inline-flex h-11 items-center justify-center rounded-[14px] bg-white px-4 text-[13px] font-semibold text-[#10233F] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Move funds
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleActionCta("Protect money")}
-                              disabled={isApplying || Boolean(flow.needsAmountClarification)}
-                              className="inline-flex h-11 items-center justify-center rounded-[14px] border border-white/14 bg-white/[0.07] px-4 text-[13px] font-semibold text-white transition hover:bg-white/[0.11] disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Protect money
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleApply}
-                              disabled={isApplying || Boolean(flow.needsAmountClarification)}
-                              className="inline-flex h-11 items-center justify-center rounded-[14px] border border-white/14 bg-white/[0.07] px-4 text-[13px] font-semibold text-white transition hover:bg-white/[0.11] disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Record only
-                            </button>
+                            {visibleActionLabels.map((label, index) => (
+                              <button
+                                key={label}
+                                type="button"
+                                onClick={() => handleActionCta(label)}
+                                disabled={isApplying || Boolean(flow.needsAmountClarification)}
+                                className={`inline-flex h-11 items-center justify-center rounded-[14px] px-4 text-[13px] font-semibold transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  index === 0 && flow.impactLevel !== "Minor"
+                                    ? "bg-[#F1FFC2] text-[#476022] shadow-[0_14px_30px_rgba(217,255,87,0.12)]"
+                                    : "border border-white/14 bg-white/[0.07] text-white hover:bg-white/[0.11]"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -1073,7 +1380,10 @@ export function AskZilaScreen() {
                   ) : null}
 
                   {shouldShowProof ? (
-                    <div className="ml-10 max-w-[610px] rounded-[24px] border border-[#D9FF57]/20 bg-[linear-gradient(180deg,rgba(217,255,87,0.12),rgba(255,255,255,0.06))] p-4 transition-all">
+                    <div
+                      className="zila-flow-step ml-10 max-w-[610px] rounded-[24px] border border-[#9FE870]/18 bg-[linear-gradient(180deg,rgba(60,138,95,0.16),rgba(7,21,38,0.42))] p-4 shadow-[0_18px_44px_rgba(60,138,95,0.08),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
+                      style={{ animationDelay: "150ms" }}
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="min-w-0">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#EAFFB4]">Proof prepared</p>
@@ -1109,7 +1419,7 @@ export function AskZilaScreen() {
               </div>
 
               <div className="relative mt-5 border-t border-white/10 pt-5">
-                <div className="rounded-[28px] border border-white/14 bg-[#071526]/62 p-3 shadow-[0_24px_58px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+                <div className="rounded-[28px] border border-white/14 bg-[#071526]/62 p-3 shadow-[0_24px_58px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl focus-within:border-[#D9FF57]/24 focus-within:shadow-[0_24px_58px_rgba(0,0,0,0.16),0_0_26px_rgba(217,255,87,0.07),inset_0_1px_0_rgba(255,255,255,0.08)]">
                   <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)] md:items-stretch">
                     <button
                       type="button"
@@ -1117,11 +1427,11 @@ export function AskZilaScreen() {
                       className={`relative flex min-h-[88px] items-center justify-center overflow-hidden rounded-[22px] border transition hover:-translate-y-0.5 ${
                         isRecording
                           ? "border-[#D9FF57]/44 bg-[#D9FF57]/18 text-[#F1FFB8] shadow-[0_0_0_10px_rgba(217,255,87,0.04),0_20px_44px_rgba(217,255,87,0.13)]"
-                          : "border-[#67E8F9]/24 bg-[#67E8F9]/12 text-[#DDFBFF] shadow-[0_0_0_10px_rgba(103,232,249,0.035),0_20px_44px_rgba(103,232,249,0.10)]"
+                          : "border-[#D9FF57]/18 bg-[#D9FF57]/[0.075] text-[#F1FFB8] shadow-[0_0_0_10px_rgba(217,255,87,0.025),0_20px_44px_rgba(217,255,87,0.07)]"
                       }`}
                       aria-label={isRecording ? "Stop listening" : "Start voice input"}
                     >
-                      <span className={`insight-signal-ripple absolute h-12 w-12 rounded-full ${isRecording ? "bg-[#D9FF57]" : "bg-[#67E8F9]"}`} />
+                      <span className="insight-signal-ripple absolute h-12 w-12 rounded-full bg-[#D9FF57]" />
                       <span className="absolute inset-3 rounded-[18px] border border-white/10" />
                       {isRecording ? <Square className="relative h-9 w-9" strokeWidth={1.8} /> : <Mic className="relative h-10 w-10" strokeWidth={1.8} />}
                     </button>
@@ -1135,7 +1445,7 @@ export function AskZilaScreen() {
                           {[13, 24, 18, 30, 20, 26, 15, 28, 17, 22].map((height, index) => (
                             <span
                               key={`${height}-${index}`}
-                              className={`w-1 rounded-full ${isRecording ? "bg-[#D9FF57]" : "bg-[#67E8F9]/60"}`}
+                              className={`w-1 rounded-full ${isRecording ? "bg-[#D9FF57] shadow-[0_0_8px_rgba(217,255,87,0.26)]" : "bg-[#D9FF57]/48"}`}
                               style={{ height: `${isRecording ? height : Math.max(7, height * 0.42)}px` }}
                             />
                           ))}
@@ -1149,7 +1459,7 @@ export function AskZilaScreen() {
                         }}
                         placeholder="Supplier cost increased by $2k on Project Horizon..."
                         rows={2}
-                        className="min-h-[82px] w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.06] px-4 py-3 text-[15px] leading-[1.6] text-white outline-none placeholder:text-[#8FA4C3] focus:border-[#67E8F9]/38"
+                        className="min-h-[82px] w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.06] px-4 py-3 text-[15px] leading-[1.6] text-white outline-none placeholder:text-[#8FA4C3] transition focus:border-[#D9FF57]/34 focus:bg-white/[0.075] focus:shadow-[0_0_0_3px_rgba(217,255,87,0.055)]"
                       />
                     </div>
                   </div>
@@ -1165,7 +1475,7 @@ export function AskZilaScreen() {
                     <button
                       type="button"
                       onClick={() => submitMessage(query)}
-                      className="inline-flex h-12 items-center justify-center gap-2 rounded-[16px] bg-white px-5 text-[14px] font-semibold text-[#10233F] shadow-[0_18px_36px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5"
+                      className="zila-operational-action-soft inline-flex h-12 items-center justify-center gap-2 rounded-[16px] bg-[#D9FF57] px-5 text-[14px] font-semibold text-[#102A4F] shadow-[0_14px_28px_rgba(217,255,87,0.14),0_0_18px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.32)] transition hover:-translate-y-0.5 hover:bg-[#E5FF75] active:scale-[0.99]"
                     >
                       <Send className="h-[15px] w-[15px]" strokeWidth={2} />
                       Coordinate

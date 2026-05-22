@@ -96,9 +96,9 @@ export function NextMoveCard({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {primaryActionLabel === "Move funds" ? (
+        {primaryActionLabel === "Move funds" || primaryActionLabel === "Coordinate payout" ? (
           <Link
-            href="/payments/make-payment"
+            href="/payments/choose-method"
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold transition ${
               dark
                 ? "bg-white text-[#121417] hover:bg-[#F4F6FB]"

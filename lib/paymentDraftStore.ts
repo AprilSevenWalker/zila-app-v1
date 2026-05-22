@@ -4,6 +4,10 @@ export interface PaymentDraft {
   amountValue: number;
   amountLabel: string;
   paymentType: string;
+  recipientName?: string;
+  currency?: string;
+  paymentRail?: string;
+  notes?: string;
   selectedAction: "full-payment" | "recommended-partial";
   sourceLabel: string;
   availableBalanceLabel: string;
@@ -15,9 +19,13 @@ const UPDATE_EVENT = "zila-payment-draft-updated";
 const defaultDraft: PaymentDraft = {
   projectId: "project-horizon",
   projectName: "Project Horizon",
-  amountValue: 4300,
-  amountLabel: "$4,300",
+  amountValue: 0,
+  amountLabel: "$0",
   paymentType: "Supplier payment",
+  recipientName: "",
+  currency: "XRP",
+  paymentRail: "Stablecoin",
+  notes: "",
   selectedAction: "full-payment",
   sourceLabel: "Available balance",
   availableBalanceLabel: "$42,300",
@@ -31,7 +39,7 @@ function normalizeAmount(value: unknown) {
   const numeric = Number(value);
 
   if (!Number.isFinite(numeric) || numeric <= 0) {
-    return defaultDraft.amountValue;
+    return 0;
   }
 
   return Math.round(numeric);
@@ -52,7 +60,12 @@ function safeParse(value: string | null): PaymentDraft {
 
   try {
     const parsed = JSON.parse(value) as Partial<PaymentDraft>;
-    const amountValue = normalizeAmount(parsed.amountValue);
+    const legacyAutomatedDraft =
+      parsed.recipientName === undefined &&
+      parsed.currency === undefined &&
+      parsed.paymentRail === undefined &&
+      parsed.notes === undefined;
+    const amountValue = legacyAutomatedDraft ? 0 : normalizeAmount(parsed.amountValue);
 
     return {
       projectId: parsed.projectId || defaultDraft.projectId,
@@ -60,6 +73,10 @@ function safeParse(value: string | null): PaymentDraft {
       amountValue,
       amountLabel: parsed.amountLabel || formatAmount(amountValue),
       paymentType: parsed.paymentType || defaultDraft.paymentType,
+      recipientName: parsed.recipientName ?? defaultDraft.recipientName,
+      currency: parsed.currency ?? defaultDraft.currency,
+      paymentRail: parsed.paymentRail ?? defaultDraft.paymentRail,
+      notes: parsed.notes ?? defaultDraft.notes,
       selectedAction: parsed.selectedAction || defaultDraft.selectedAction,
       sourceLabel: parsed.sourceLabel || defaultDraft.sourceLabel,
       availableBalanceLabel: parsed.availableBalanceLabel || defaultDraft.availableBalanceLabel,
@@ -90,6 +107,10 @@ export function savePaymentDraft(draft: Partial<PaymentDraft>) {
     amountValue,
     amountLabel: draft.amountLabel || formatAmount(amountValue),
     paymentType: draft.paymentType || current.paymentType,
+    recipientName: draft.recipientName ?? current.recipientName,
+    currency: draft.currency ?? current.currency,
+    paymentRail: draft.paymentRail ?? current.paymentRail,
+    notes: draft.notes ?? current.notes,
     selectedAction: draft.selectedAction || current.selectedAction,
     sourceLabel: draft.sourceLabel || current.sourceLabel,
     availableBalanceLabel: draft.availableBalanceLabel || current.availableBalanceLabel,

@@ -15,9 +15,9 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: "Home", icon: Home, href: "/home" },
   { name: "Projects", icon: FolderKanban, href: "/projects" },
-  { name: "Ask", icon: MessageSquareText, href: "/ask" },
   { name: "Payments", icon: CreditCard, href: "/payments" },
   { name: "Proof", icon: ShieldCheck, href: "/proof" },
+  { name: "Ask", icon: MessageSquareText, href: "/ask" },
   { name: "Me", icon: UserRound, href: "/me" },
 ];
 

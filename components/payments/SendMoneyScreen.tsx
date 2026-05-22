@@ -3,22 +3,22 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
+  ChevronDown,
   CheckCircle2,
   LoaderCircle,
-  MoveRight,
   ShieldCheck,
   Sparkles,
-  WalletCards,
 } from "lucide-react";
 
 import { clearPaymentDraft, getPaymentDraft } from "@/lib/paymentDraftStore";
-import { getMoneySourceState, subscribeToMoneySource } from "@/lib/moneySourceStore";
+import { FlowBackNav } from "@/components/ui/FlowBackNav";
+import { getMoneySourceState, saveMoneySourceState, subscribeToMoneySource } from "@/lib/moneySourceStore";
 import {
   getProtectedMoneySummary,
+  recordPaymentReserveRecalculation,
   subscribeToProtectedMoney,
   useReserveForPayment,
   type ProtectedReserve,
@@ -33,25 +33,26 @@ import {
   saveProofTransaction,
   shortenWalletAddress,
 } from "@/lib/proofTransactionStore";
+import { createOperationalProofRecord, saveOperationalProofRecord } from "@/lib/proof";
+import { OperationalWalletStatus } from "@/components/ui/OperationalWalletStatus";
 
 type FlowState = "details" | "review" | "awaiting-signature" | "signing" | "processing" | "success" | "failed";
 
 interface XamanPayloadRequest {
-  id: string;
-  url: string;
-  qrPng: string;
-  websocketStatus: string;
+  uuid: string;
+  qrUrl: string;
+  deepLink: string;
+  websocketStatusUrl: string;
 }
 
 interface PayloadStatusResponse {
-  meta: {
-    signed: boolean;
-  };
-  response: {
-    account: string | null;
-    txid: string | null;
-    resolved_at: string | null;
-  };
+  signed: boolean;
+  rejected: boolean;
+  txHash: string | null;
+  account?: string | null;
+  validated?: boolean;
+  ledgerIndex?: number;
+  timestamp?: string;
   error?: string;
 }
 
@@ -64,21 +65,152 @@ interface PendingOperationalPayment {
   recipient: string;
   reason: string;
   reserveId?: string;
+  destinationAddress: string;
   safeBefore: number;
   safeAfter: number;
+  protectedAfter: number;
   walletAddress: string;
 }
 
-const pendingPaymentStorageKey = "zila-xaman-operational-payment";
-const XRPL_VERIFICATION_AMOUNT = "0.000001";
+type PayoutRail = "Stablecoin" | "Bank transfer" | "Mobile money";
+type PayoutCurrency = "USD" | "KES" | "USDT" | "USDC" | "RLUSD" | "XRP";
+type PayoutMode = "manual" | "existing";
 
-const recipients = ["Northline Suppliers", "Mara Contractor Studio", "Atlas Logistics", "Kinetic Production"];
+interface SupplierProfile {
+  id: string;
+  supplierName: string;
+  companyName: string;
+  preferredRail: PayoutRail;
+  currency: PayoutCurrency;
+  walletAddress: string;
+  bankPlaceholder: string;
+  mobileMoneyPlaceholder: string;
+  notes: string;
+  linkedProjects: string[];
+  historySummary: string;
+}
+
+const pendingPaymentStorageKey = "zila-xaman-operational-payment";
+const supplierStorageKey = "zila-operational-suppliers";
+
 const projects = ["Project Horizon", "Atlas Project", "Northstar Project", "Helix Project"];
 const reasons = ["Supplier payment", "Contractor payment", "Send project funds", "Move operational funds"];
+const payoutTimings = ["Ready today", "Due this week", "After invoice approval", "Milestone release", "Schedule manually"];
+const milestones = ["Foundation phase", "Delivery window", "Production milestone", "Final supplier release", "No linked milestone"];
+const payoutCurrencies: PayoutCurrency[] = ["USD", "KES", "USDT", "USDC", "RLUSD", "XRP"];
+const projectOptions = ["General operations", ...projects];
+const defaultDestinationAddress = "";
+const reserveOptions = [
+  { id: "recommend", name: "Let Zila recommend", amount: 24220, explanation: "Zila suggests the safest source based on reserves and payout size." },
+  { id: "supplier", name: "Supplier reserve", amount: 4300, explanation: "Money already set aside for supplier and vendor payouts." },
+  { id: "payroll", name: "Payroll reserve", amount: 7200, explanation: "Protected money for staff, contractors, and payroll timing." },
+  { id: "operations", name: "Operations buffer", amount: 8600, explanation: "Flexible operating money for day-to-day project movement." },
+  { id: "safety", name: "Safety net", amount: 4100, explanation: "Backup funds for unexpected pressure before money moves." },
+  { id: "available", name: "Available operating balance", amount: 36100, explanation: "Unprotected operating funds available for general payouts." },
+];
+const emptySupplierForm: Omit<SupplierProfile, "id" | "historySummary"> = {
+  supplierName: "",
+  companyName: "",
+  preferredRail: "Stablecoin",
+  currency: "USDT",
+  walletAddress: "",
+  bankPlaceholder: "",
+  mobileMoneyPlaceholder: "",
+  notes: "",
+  linkedProjects: [],
+};
+const initialSuppliers: SupplierProfile[] = [
+  {
+    id: "northline",
+    supplierName: "Northline Suppliers",
+    companyName: "Northline Materials Ltd",
+    preferredRail: "Stablecoin",
+    currency: "USDT",
+    walletAddress: "",
+    bankPlaceholder: "Bank payout details can be added when bank rails are ready.",
+    mobileMoneyPlaceholder: "Mobile money payout details can be added when mobile money is ready.",
+    notes: "Primary materials supplier. Usually paid before Friday delivery windows.",
+    linkedProjects: ["Project Horizon", "Atlas Project"],
+    historySummary: "4 payouts recorded",
+  },
+  {
+    id: "mara-contractors",
+    supplierName: "Mara Contractors",
+    companyName: "Mara Contractor Studio",
+    preferredRail: "Stablecoin",
+    currency: "USDC",
+    walletAddress: "",
+    bankPlaceholder: "Bank payout details pending.",
+    mobileMoneyPlaceholder: "Mobile payout details pending.",
+    notes: "Contractor payout for milestone-based production work.",
+    linkedProjects: ["Atlas Project"],
+    historySummary: "2 payouts recorded",
+  },
+  {
+    id: "atlas-logistics",
+    supplierName: "Atlas Logistics",
+    companyName: "Atlas Regional Logistics",
+    preferredRail: "Mobile money",
+    currency: "KES",
+    walletAddress: "",
+    bankPlaceholder: "Bank payout details pending.",
+    mobileMoneyPlaceholder: "M-Pesa payout details coming soon.",
+    notes: "Regional delivery and transport support.",
+    linkedProjects: ["Northstar Project"],
+    historySummary: "Payment rail pending",
+  },
+];
 
 function formatCurrency(amount: number) {
   return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
+
+function formatPayoutAmount(amount: number, currency: PayoutCurrency) {
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: currency === "XRP" ? 6 : 0 })} ${currency}`;
+}
+
+const suggestedPayouts = [
+  {
+    id: "steel-friday",
+    title: "Steel supplier due Friday",
+    supplierId: "northline",
+    projectName: "Project Horizon",
+    amount: "4300",
+    currency: "USDT" as PayoutCurrency,
+    rail: "Stablecoin" as PayoutRail,
+    reason: "Supplier payment",
+    timing: "Due this week",
+    milestone: "Foundation phase",
+    note: "Materials release before Friday delivery window.",
+  },
+  {
+    id: "contractor-pending",
+    title: "Contractor payout pending",
+    supplierId: "mara-contractors",
+    projectName: "Atlas Project",
+    amount: "1800",
+    currency: "USDC" as PayoutCurrency,
+    rail: "Stablecoin" as PayoutRail,
+    reason: "Contractor payment",
+    timing: "Milestone release",
+    milestone: "Production milestone",
+    note: "Pending milestone payment for approved work.",
+  },
+  {
+    id: "logistics-deposit",
+    title: "Logistics deposit approaching",
+    supplierId: "atlas-logistics",
+    projectName: "Northstar Project",
+    amount: "62000",
+    currency: "KES" as PayoutCurrency,
+    rail: "Mobile money" as PayoutRail,
+    reason: "Supplier payment",
+    timing: "After invoice approval",
+    milestone: "Delivery window",
+    note: "Mobile money route coming soon; keep the obligation visible.",
+  },
+];
+
 
 function formatTime(dateIso: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -95,34 +227,34 @@ function buildRecommendation(input: {
   projectName: string;
 }) {
   if (input.selectedReserve && input.amount <= input.selectedReserve.amount) {
-    return `You can proceed safely using ${input.selectedReserve.name}.`;
+    return `Zila recommends using ${input.selectedReserve.name} for this payout. Protected reserves remain accounted for.`;
   }
 
   if (input.safeAfter <= 0) {
-    return `This payment may create pressure before the next incoming invoice.`;
+    return "Coordination needed before approval. This payout should wait for reserve review or incoming funds.";
   }
 
   if (input.amount > input.safeBefore * 0.6) {
-    return `Paying 60% today keeps ${input.projectName} within a safer operating range.`;
+    return `Zila recommends a reserve-safe payout route so ${input.projectName} keeps enough liquidity after payment.`;
   }
 
   if (input.safeAfter < 10000) {
-    return "This payment reduces your safe range later this week.";
+    return "Timing sensitive. Approve when the next incoming payment is clear or use a protected reserve.";
   }
 
-  return "This payment can move without disrupting your current operating range.";
+  return "Zila recommends stablecoin settlement for this payout because it arrives faster and preserves project liquidity.";
 }
 
 function riskLevel(safeAfter: number, amount: number, safeBefore: number) {
   if (safeAfter <= 0 || amount > safeBefore) {
-    return { label: "High pressure", tone: "border-rose-200/24 bg-rose-300/[0.10] text-[#FFD6DA]" };
+    return { label: "Coordination needed", tone: "border-rose-200/24 bg-rose-300/[0.10] text-[#FFD6DA]" };
   }
 
   if (safeAfter < 10000 || amount > safeBefore * 0.6) {
-    return { label: "Watch timing", tone: "border-amber-200/24 bg-amber-300/[0.10] text-[#FFE8B0]" };
+    return { label: "Timing sensitive", tone: "border-amber-200/24 bg-amber-300/[0.10] text-[#FFE8B0]" };
   }
 
-  return { label: "Safe to proceed", tone: "border-[#D9FF57]/24 bg-[#D9FF57]/10 text-[#F1FFB8]" };
+  return { label: "Ready to approve", tone: "border-[#D9FF57]/24 bg-[#D9FF57]/10 text-[#F1FFB8]" };
 }
 
 function getPendingPayment(): PendingOperationalPayment | null {
@@ -158,20 +290,59 @@ function clearPendingPayment() {
   window.sessionStorage.removeItem(pendingPaymentStorageKey);
 }
 
+function getStoredSuppliers() {
+  if (typeof window === "undefined") {
+    return initialSuppliers;
+  }
+
+  const raw = window.localStorage.getItem(supplierStorageKey);
+  if (!raw) {
+    return initialSuppliers;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as SupplierProfile[];
+    return parsed.length ? parsed : initialSuppliers;
+  } catch {
+    return initialSuppliers;
+  }
+}
+
+function storeSuppliers(suppliers: SupplierProfile[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(supplierStorageKey, JSON.stringify(suppliers));
+}
+
 export function SendMoneyScreen() {
   const searchParams = useSearchParams();
   const draft = getPaymentDraft();
   const [moneySource, setMoneySource] = useState(getMoneySourceState);
   const [summary, setSummary] = useState(getProtectedMoneySummary);
-  const [recipient, setRecipient] = useState(recipients[0]);
-  const [projectName, setProjectName] = useState(draft.projectName || projects[0]);
-  const [sourceId, setSourceId] = useState("available");
-  const [amount, setAmount] = useState(String(draft.amountValue || 4300));
+  const [suppliers, setSuppliers] = useState(getStoredSuppliers);
+  const [payoutMode, setPayoutMode] = useState<PayoutMode>("manual");
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [supplierFormOpen, setSupplierFormOpen] = useState(false);
+  const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
+  const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
+  const [recipient, setRecipient] = useState(draft.recipientName || "");
+  const [projectName, setProjectName] = useState(draft.projectName || projectOptions[0]);
+  const [sourceId, setSourceId] = useState("recommend");
+  const [amount, setAmount] = useState(draft.amountValue ? String(draft.amountValue) : "");
   const [reason, setReason] = useState(draft.paymentType || reasons[0]);
+  const [payoutTiming, setPayoutTiming] = useState(payoutTimings[0]);
+  const [linkedMilestone, setLinkedMilestone] = useState(milestones[0]);
+  const [payoutNotes, setPayoutNotes] = useState(draft.notes || "");
+  const [payoutCurrency, setPayoutCurrency] = useState<PayoutCurrency>((draft.currency as PayoutCurrency) || "XRP");
+  const [preferredRail, setPreferredRail] = useState<PayoutRail>((draft.paymentRail as PayoutRail) || "Stablecoin");
+  const [destinationAddress, setDestinationAddress] = useState(defaultDestinationAddress);
   const [flowState, setFlowState] = useState<FlowState>("details");
   const [paymentRecord, setPaymentRecord] = useState<PaymentMovementRecord | null>(null);
   const [activePayload, setActivePayload] = useState<XamanPayloadRequest | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
     const update = () => setSummary(getProtectedMoneySummary());
@@ -187,13 +358,20 @@ export function SendMoneyScreen() {
     return subscribeToMoneySource(update);
   }, []);
 
+  useEffect(() => {
+    storeSuppliers(suppliers);
+  }, [suppliers]);
+
+  const selectedSupplier = suppliers.find((supplier) => supplier.id === selectedSupplierId);
+
   const amountValue = useMemo(() => {
     const parsed = Number(amount.replace(/[^\d.]/g, ""));
-    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   }, [amount]);
 
   const selectedReserve = summary.reserves.find((reserve) => reserve.id === sourceId);
-  const sourceLabel = selectedReserve?.name ?? "Available balance";
+  const selectedReserveOption = reserveOptions.find((reserve) => reserve.id === sourceId) ?? reserveOptions[0];
+  const sourceLabel = selectedReserve?.name ?? selectedReserveOption.name;
   const safeBefore = summary.safeToSpend;
   const safeAfter = selectedReserve ? safeBefore : Math.max(safeBefore - amountValue, 0);
   const protectedAfter = selectedReserve
@@ -208,36 +386,50 @@ export function SendMoneyScreen() {
     projectName,
   });
   const risk = riskLevel(safeAfter, amountValue, safeBefore);
-
-  const handleReview = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!amountValue) {
-      return;
-    }
-
-    setFlowState("review");
-  };
+  const suggestedTiming = payoutTiming === "Ready today" && safeAfter < 10000 ? "After next incoming payment" : payoutTiming;
+  const estimatedArrival = preferredRail === "Stablecoin" ? "Expected to arrive within 1 minute" : "Coming soon";
+  const runwayRemaining = safeAfter < 10000 ? "Attention needed soon" : "This payout keeps runway healthy";
+  const proofStatus = preferredRail === "Stablecoin" ? "This payment will appear in project proof history" : "Proof history will be ready when this rail is available";
+  const payoutMethodLabel = destinationAddress.trim()
+    ? `Linked payout method ${shortenWalletAddress(destinationAddress)}`
+    : "Recipient information can be added before approval";
+  const currencySupported = payoutCurrency === "XRP";
+  const railSupported = preferredRail === "Stablecoin";
+  const canApproveInXaman = currencySupported && railSupported;
+  const supplierProjectHint = selectedSupplier?.linkedProjects.includes(projectName)
+    ? `${selectedSupplier.supplierName} is already linked to ${projectName}.`
+    : `${projectName} selected. Zila will use this context without locking payout details.`;
+  const projectSuggestions = suggestedPayouts.filter((suggestion) => projectName === "General operations" || suggestion.projectName === projectName);
 
   const finalizePayment = async (payloadId: string) => {
     const pending = getPendingPayment();
-    const response = await fetch(`/api/xaman/payload/${payloadId}`, { cache: "no-store" });
+    const response = await fetch(`/api/payments/status/${payloadId}`, { cache: "no-store" });
     const body = (await response.json()) as PayloadStatusResponse;
 
     if (!response.ok) {
       throw new Error(body.error || "Unable to verify payment.");
     }
 
-    if (!body.meta.signed || !body.response.txid || !pending) {
+    if (!body.signed || !body.txHash || !pending) {
       clearPendingPayment();
       setFlowState("failed");
-      setPaymentMessage("Payment was not completed.");
+      setPaymentMessage(body.rejected ? "Payment was rejected in Xaman." : "Payment was not completed.");
       setActivePayload(null);
       return;
     }
 
-    const createdAtIso = body.response.resolved_at ?? new Date().toISOString();
-    const txHash = body.response.txid;
+    const createdAtIso = body.timestamp ?? new Date().toISOString();
+    const txHash = body.txHash;
+    saveMoneySourceState({
+      ...getMoneySourceState(),
+      connected: true,
+      sourceLabel: "Xaman wallet",
+      walletAddress: body.account || pending.walletAddress,
+      walletAddressShort: shortenWalletAddress(body.account || pending.walletAddress),
+      status: "transaction-confirmed",
+      network: "XRPL Mainnet",
+      proofEnabled: true,
+    });
     const record: PaymentMovementRecord = {
       id: `payment-movement-${Date.now()}`,
       type: "outgoing",
@@ -264,6 +456,14 @@ export function SendMoneyScreen() {
         recipientName: pending.recipient,
       });
     }
+    recordPaymentReserveRecalculation({
+      amount: pending.amountValue,
+      amountLabel: pending.amountLabel,
+      projectName: pending.projectName,
+      recipientName: pending.recipient,
+      txHash,
+      reserveAfterLabel: formatCurrency(pending.protectedAfter),
+    });
     saveLatestPaymentTransaction({
       txid: txHash,
       amountLabel: pending.amountLabel,
@@ -275,14 +475,16 @@ export function SendMoneyScreen() {
       movementType: "outgoing",
       verificationState: "Verified",
       transferStatus: "Completed",
-      walletAddress: body.response.account || pending.walletAddress,
+      reserveAfter: formatCurrency(pending.protectedAfter),
+      obligationStatus: "Settled",
+      walletAddress: body.account || pending.walletAddress,
       network: "XRPL Mainnet",
       createdAtIso,
     });
     saveProofTransaction({
       id: `outgoing-payment-${Date.now()}`,
-      walletAddress: body.response.account || pending.walletAddress,
-      walletAddressShort: shortenWalletAddress(body.response.account || pending.walletAddress),
+      walletAddress: body.account || pending.walletAddress,
+      walletAddressShort: shortenWalletAddress(body.account || pending.walletAddress),
       status: "Confirmed",
       amountLabel: pending.amountLabel,
       amountValue: pending.amountValue,
@@ -297,6 +499,18 @@ export function SendMoneyScreen() {
       createdAtIso,
       displayTimestamp: formatTime(createdAtIso),
     });
+    saveOperationalProofRecord(createOperationalProofRecord({
+      projectName: pending.projectName,
+      supplier: pending.recipient,
+      paymentAmount: pending.amountLabel,
+      paymentRail: "XRPL settlement through Xaman",
+      xrplTransactionHash: txHash,
+      ledgerIndex: body.ledgerIndex,
+      operationalCategory: pending.reason,
+      reserveImpact: `Protected reserves updated to ${formatCurrency(pending.protectedAfter)}.`,
+      safeToSpendImpact: `Safe to Spend changed from ${formatCurrency(pending.safeBefore)} to ${formatCurrency(pending.safeAfter)}.`,
+      timestamp: createdAtIso,
+    }));
     clearPaymentDraft();
     clearPendingPayment();
     setPaymentRecord(record);
@@ -329,7 +543,7 @@ export function SendMoneyScreen() {
       return;
     }
 
-    const websocket = new WebSocket(activePayload.websocketStatus);
+    const websocket = new WebSocket(activePayload.websocketStatusUrl);
 
     websocket.onmessage = (event) => {
       try {
@@ -362,7 +576,7 @@ export function SendMoneyScreen() {
           }
 
           setFlowState("processing");
-          void finalizePayment(activePayload.id).catch((error) => {
+          void finalizePayment(activePayload.uuid).catch((error) => {
             setFlowState("failed");
             setPaymentMessage(error instanceof Error ? error.message : "Unable to confirm payment.");
           });
@@ -375,30 +589,200 @@ export function SendMoneyScreen() {
     return () => websocket.close();
   }, [activePayload]);
 
-  const handleConfirm = async () => {
-    if (!amountValue || flowState === "processing") {
+  const openAddSupplier = () => {
+    setEditingSupplierId(null);
+    setSupplierForm({
+      ...emptySupplierForm,
+      linkedProjects: [projectName],
+      preferredRail,
+      currency: payoutCurrency,
+    });
+    setSupplierFormOpen(true);
+  };
+
+  const openEditSupplier = (supplier: SupplierProfile) => {
+    setEditingSupplierId(supplier.id);
+    setSupplierForm({
+      supplierName: supplier.supplierName,
+      companyName: supplier.companyName,
+      preferredRail: supplier.preferredRail,
+      currency: supplier.currency,
+      walletAddress: supplier.walletAddress,
+      bankPlaceholder: supplier.bankPlaceholder,
+      mobileMoneyPlaceholder: supplier.mobileMoneyPlaceholder,
+      notes: supplier.notes,
+      linkedProjects: supplier.linkedProjects,
+    });
+    setSupplierFormOpen(true);
+  };
+
+  const handleSaveSupplier = () => {
+    if (!supplierForm.supplierName.trim()) {
+      setPaymentMessage("Add a supplier name before saving.");
       return;
     }
 
+    const profile: SupplierProfile = {
+      id: editingSupplierId ?? `supplier-${Date.now()}`,
+      supplierName: supplierForm.supplierName.trim(),
+      companyName: supplierForm.companyName.trim() || supplierForm.supplierName.trim(),
+      preferredRail: supplierForm.preferredRail,
+      currency: supplierForm.currency,
+      walletAddress: supplierForm.walletAddress.trim(),
+      bankPlaceholder: supplierForm.bankPlaceholder.trim() || "Bank payout details can be added later.",
+      mobileMoneyPlaceholder: supplierForm.mobileMoneyPlaceholder.trim() || "Mobile money payout details can be added later.",
+      notes: supplierForm.notes.trim(),
+      linkedProjects: supplierForm.linkedProjects.length ? supplierForm.linkedProjects : [projectName],
+      historySummary: editingSupplierId ? selectedSupplier?.historySummary ?? "Reusable supplier profile" : "New supplier profile",
+    };
+
+    setSuppliers((current) => {
+      if (editingSupplierId) {
+        return current.map((supplier) => (supplier.id === editingSupplierId ? profile : supplier));
+      }
+
+      return [profile, ...current];
+    });
+    setSelectedSupplierId(profile.id);
+    setRecipient(profile.supplierName);
+    setDestinationAddress(profile.walletAddress);
+    setSupplierFormOpen(false);
+    setPaymentMessage("Supplier saved and ready for future payouts.");
+  };
+
+  const applySuggestion = (suggestion: (typeof suggestedPayouts)[number]) => {
+    const supplier = suppliers.find((item) => item.id === suggestion.supplierId);
+
+    setPayoutMode("existing");
+    if (supplier) {
+      setSelectedSupplierId(supplier.id);
+      setRecipient(supplier.supplierName);
+      setDestinationAddress(supplier.walletAddress);
+    }
+
+    setProjectName(suggestion.projectName);
+    setAmount(suggestion.amount);
+    setPayoutCurrency(suggestion.currency);
+    setPreferredRail(suggestion.rail);
+    setReason(suggestion.reason);
+    setPayoutTiming(suggestion.timing);
+    setLinkedMilestone(suggestion.milestone);
+    setPayoutNotes(suggestion.note);
+    setPaymentMessage("Suggested payout loaded. You can edit every field before approval.");
+  };
+
+  const startManualPayout = () => {
+    setPayoutMode("manual");
+    setSelectedSupplierId("");
+    setRecipient("");
+    setProjectName(projectOptions[0]);
+    setAmount("");
+    setPayoutCurrency("XRP");
+    setPreferredRail("Stablecoin");
+    setReason(reasons[0]);
+    setPayoutTiming(payoutTimings[0]);
+    setLinkedMilestone(milestones[0]);
+    setPayoutNotes("");
+    setDestinationAddress("");
+    setSourceId("recommend");
+    setFlowState("details");
+    setPaymentMessage("Manual payout started. Enter the supplier, project, and amount you want to pay.");
+  };
+
+  const startExistingPaymentMode = () => {
+    setPayoutMode("existing");
+    setFlowState("details");
+    setPaymentMessage("Choose a payment due below if useful. You can edit every field before approval.");
+  };
+
+  const handleSelectSupplier = (supplierId: string) => {
+    setSelectedSupplierId(supplierId);
+
+    const supplier = suppliers.find((item) => item.id === supplierId);
+    if (!supplier) {
+      return;
+    }
+
+    setRecipient(supplier.supplierName);
+    setDestinationAddress(supplier.walletAddress);
+    setPaymentMessage("Supplier loaded. Amount, project, currency, rail, and reason remain editable.");
+  };
+
+  const validatePaymentReadiness = () => {
+    if (!amountValue || flowState === "processing") {
+      return "Enter the amount you want to pay before approval.";
+    }
+
+    if (!recipient.trim()) {
+      return "Add who you are paying before approval.";
+    }
+
+    if (!destinationAddress.trim()) {
+      return "Add the recipient XRPL address before approval.";
+    }
+
+    if (!payoutCurrency) {
+      return "Choose the payment currency before approval.";
+    }
+
+    if (!sourceId) {
+      return "Choose where the money should come from before approval.";
+    }
+
+    if (!preferredRail) {
+      return "Choose the payment rail before approval.";
+    }
+
     if (!moneySource.connected || !moneySource.walletAddress) {
-      setPaymentMessage("Connect your money before confirming this payment.");
+      return "Connect your Xaman wallet before approving this payment.";
+    }
+
+    if (!canApproveInXaman) {
+      return `${payoutCurrency} via ${preferredRail} is coming soon. Use XRP through Stablecoin for the first real mainnet test.`;
+    }
+
+    return null;
+  };
+
+  const handleConfirm = async () => {
+    const validationMessage = validatePaymentReadiness();
+    if (validationMessage) {
+      setPaymentMessage(validationMessage);
+      if (validationMessage.includes("XRPL address")) {
+        setAdvancedOpen(true);
+      }
+      return;
+    }
+
+    if (flowState !== "review") {
+      setFlowState("review");
+      setPaymentMessage("Review carefully. The next action opens Xaman for a real mainnet transaction.");
       return;
     }
 
     setFlowState("processing");
     setPaymentMessage("Preparing signing request...");
+    saveMoneySourceState({
+      ...moneySource,
+      status: "payment-pending",
+      network: "XRPL Mainnet",
+      proofEnabled: true,
+    });
 
     try {
-      const response = await fetch("/api/xaman/payment", {
+      const response = await fetch("/api/payments/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          amount: XRPL_VERIFICATION_AMOUNT,
-          walletAddress: moneySource.walletAddress,
-          linkedLabel: `${reason} · ${formatCurrency(amountValue)}`,
-          project: projectName,
+          supplierName: recipient,
+          amount: String(amountValue),
+          destinationAddress,
+          memo: [reason, projectName, linkedMilestone, payoutNotes].filter(Boolean).join(" · "),
+          projectId: projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          projectName,
+          senderAddress: moneySource.walletAddress,
           currency: "XRP",
           returnPath: "/payments/make-payment",
         }),
@@ -410,21 +794,23 @@ export function SendMoneyScreen() {
       }
 
       setPendingPayment({
-        payloadId: body.id,
-        amountLabel: formatCurrency(amountValue),
+        payloadId: body.uuid,
+        amountLabel: formatPayoutAmount(amountValue, payoutCurrency),
         amountValue,
         projectName,
         sourceLabel,
         recipient,
         reason,
         reserveId: selectedReserve?.id,
+        destinationAddress,
         safeBefore,
         safeAfter,
+        protectedAfter,
         walletAddress: moneySource.walletAddress,
       });
       setActivePayload(body);
       setFlowState("awaiting-signature");
-      setPaymentMessage("Open Xaman to approve this operational payment.");
+      setPaymentMessage("Open Xaman to approve this operational payout.");
     } catch (error) {
       setFlowState("failed");
       setPaymentMessage(error instanceof Error ? error.message : "Unable to prepare payment.");
@@ -435,17 +821,22 @@ export function SendMoneyScreen() {
     <div className="-mx-4 -mt-2 flex min-h-[calc(100vh-7.5rem)] flex-col overflow-hidden bg-[radial-gradient(ellipse_at_18%_0%,rgba(255,255,255,0.24),transparent_30%),radial-gradient(ellipse_at_84%_8%,rgba(103,232,249,0.18),transparent_28%),linear-gradient(160deg,#12325A_0%,#173D6D_44%,#102A4F_100%)] px-6 pb-28 pt-8 text-white md:-mx-6 md:rounded-[36px] md:px-8 md:pb-12 lg:-mx-8 lg:px-10">
       <div className="pointer-events-none absolute inset-x-0 top-12 h-96 bg-[radial-gradient(circle_at_20%_18%,rgba(103,232,249,0.18),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(109,94,248,0.14),transparent_24%)]" />
       <div className="relative flex flex-1 flex-col">
-        <Link href="/payments" className="inline-flex w-fit items-center gap-2 text-[12px] font-semibold text-[#DCE8FF] transition hover:opacity-80">
-          <ArrowLeft className="h-[14px] w-[14px]" strokeWidth={2} />
-          Payments
-        </Link>
+        <FlowBackNav
+          items={[
+            { label: "Payments", href: "/payments", primary: true },
+            { label: "Dashboard", href: "/home" },
+          ]}
+        />
 
-        <div className="mt-7 max-w-[560px]">
-          <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-[#BFEFFF]">Send money</p>
-          <h1 className="mt-4 text-[40px] font-semibold leading-[0.98] tracking-[-0.055em] text-white">Review the impact before money moves.</h1>
-          <p className="mt-5 max-w-[390px] text-[16px] leading-[1.68] text-[#DCE8FF]/88">
-            Choose the recipient, project, and source so Zila can show the operating effect before you confirm.
-          </p>
+        <div className="mt-7 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-[560px]">
+            <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-[#BFEFFF]">Create operational payout</p>
+            <h1 className="mt-4 text-[40px] font-semibold leading-[0.98] tracking-[-0.055em] text-white">Coordinate a payout safely.</h1>
+            <p className="mt-5 max-w-[440px] text-[16px] leading-[1.68] text-[#DCE8FF]/88">
+              Enter who needs to be paid, choose the project, and let Zila show what the payment changes before money moves.
+            </p>
+          </div>
+          <OperationalWalletStatus />
         </div>
 
         {flowState === "success" && paymentRecord ? (
@@ -486,132 +877,436 @@ export function SendMoneyScreen() {
             </div>
           </section>
         ) : (
-          <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-            <form onSubmit={handleReview} className="rounded-[30px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,42,79,0.72),rgba(12,31,58,0.56))] p-6 shadow-[0_24px_58px_rgba(31,68,116,0.22),inset_0_1px_0_rgba(255,255,255,0.11)]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#67E8F9]">Payment details</p>
-              <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Recipient</span>
-                  <select value={recipient} onChange={(event) => setRecipient(event.target.value)} className="h-13 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
-                    {recipients.map((item) => <option key={item}>{item}</option>)}
-                  </select>
-                </label>
+          <form onSubmit={(event) => event.preventDefault()} className="mt-8 space-y-5">
+            {flowState === "review" ? (
+              <section className="rounded-[28px] border border-[#D9FF57]/22 bg-[linear-gradient(180deg,rgba(217,255,87,0.12),rgba(16,42,79,0.56))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),0_0_24px_rgba(217,255,87,0.06),inset_0_1px_0_rgba(255,255,255,0.10)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F1FFB8]">Step 4 · Confirm payout</p>
+                <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.045em] text-white">Confirm and send this payout.</h2>
+                <p className="mt-2 max-w-[620px] text-[13px] leading-[1.65] text-[#E8F7D1]">
+                  The next action opens Xaman for approval and creates a real XRPL Mainnet transaction. Use a very small XRP amount for your first test.
+                </p>
+                <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ["Recipient", recipient],
+                    ["Sending from", moneySource.walletAddressShort || "Xaman wallet"],
+                    ["Project", projectName],
+                    ["Amount", formatPayoutAmount(amountValue, payoutCurrency)],
+                    ["Currency", payoutCurrency],
+                    ["Reserve source", sourceLabel],
+                    ["Payment reason", reason],
+                    ["Reserve impact", `${formatCurrency(protectedAfter)} protected after payout`],
+                    ["Proof record", `${projectName}, ${recipient}, amount, reserve source, and XRPL reference`],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-[16px] border border-white/10 bg-white/[0.08] px-3.5 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C9D4F5]">{label}</p>
+                      <p className="mt-1 text-[13px] font-semibold leading-[1.4] text-white">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setFlowState("details")} className="h-11 rounded-full border border-white/14 bg-white/[0.08] px-4 text-[13px] font-semibold text-[#EAF1FF]">
+                    Edit details
+                  </button>
+                  <button type="button" onClick={handleConfirm} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(217,255,87,0.16)]">
+                    Confirm and send payout
+                    <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />
+                  </button>
+                </div>
+                {paymentMessage ? <p className="mt-3 text-[12px] font-medium text-[#FFE8B0]">{paymentMessage}</p> : null}
+              </section>
+            ) : null}
+
+            <section className="rounded-[30px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,42,79,0.72),rgba(12,31,58,0.56))] p-6 shadow-[0_24px_58px_rgba(31,68,116,0.22),inset_0_1px_0_rgba(255,255,255,0.11)]">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#67E8F9]">Step 1 · Create payout</p>
+                  <h2 className="mt-3 text-[28px] font-semibold leading-[1.05] tracking-[-0.055em] text-white">Create the payout first.</h2>
+                  <p className="mt-3 max-w-[520px] text-[13px] leading-[1.65] text-[#DCE8FF]/82">
+                    You stay in control of the supplier, project, amount, rail, and timing. Zila helps you understand the impact before money moves.
+                  </p>
+                </div>
+                <div className="rounded-[24px] border border-white/12 bg-white/[0.08] px-5 py-4 text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#C9D4F5]">Amount</p>
+                  <p className="mt-1 text-[36px] font-semibold tracking-[-0.06em] text-white">{formatPayoutAmount(amountValue, payoutCurrency)}</p>
+                  <p className="mt-1 text-[12px] font-medium text-[#D9FF57]">{payoutCurrency} payout · {suggestedTiming}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                {[
+                  {
+                    id: "manual" as PayoutMode,
+                    title: "Create manual payout",
+                    copy: "Start blank. You choose the supplier, project, amount, rail, and reason.",
+                    action: startManualPayout,
+                  },
+                  {
+                    id: "existing" as PayoutMode,
+                    title: "Select existing payment due",
+                    copy: "Use a due payment as a starting point, then edit anything before sending.",
+                    action: startExistingPaymentMode,
+                  },
+                ].map((mode) => {
+                  const active = payoutMode === mode.id;
+
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={mode.action}
+                      className={`rounded-[20px] border p-4 text-left transition ${active ? "border-[#D9FF57]/34 bg-[#D9FF57]/10 shadow-[0_0_24px_rgba(217,255,87,0.08)]" : "border-white/10 bg-white/[0.055] hover:border-white/20 hover:bg-white/[0.08]"}`}
+                    >
+                      <span className="block text-[15px] font-semibold text-white">{mode.title}</span>
+                      <span className="mt-2 block text-[12px] leading-[1.55] text-[#C9D4F5]/78">{mode.copy}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[13px] font-semibold text-white">Supplier</p>
+                    <p className="mt-1 text-[12px] text-[#C9D4F5]/76">Reusable payee profiles help Zila remember payout methods and project context.</p>
+                  </div>
+                  <button type="button" onClick={openAddSupplier} className="inline-flex h-10 items-center justify-center rounded-full border border-[#D9FF57]/22 bg-[#D9FF57]/12 px-4 text-[12px] font-semibold text-[#F1FFB8] transition hover:bg-[#D9FF57]/18">
+                    Add supplier
+                  </button>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Choose saved supplier</span>
+                    <select value={selectedSupplierId} onChange={(event) => handleSelectSupplier(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                      <option value="">No saved supplier selected</option>
+                      {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.supplierName} · {supplier.companyName}</option>)}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Supplier / recipient name</span>
+                    <input value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="Who are you paying?" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50 transition hover:border-white/22 focus:border-[#D9FF57]/44" />
+                  </label>
+                  {selectedSupplier ? (
+                    <button type="button" onClick={() => openEditSupplier(selectedSupplier)} className="h-12 self-end rounded-full border border-white/14 bg-white/[0.08] px-4 text-[12px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.12]">
+                      Edit supplier
+                    </button>
+                  ) : null}
+                </div>
+
+                {selectedSupplier ? (
+                  <div className="mt-3 grid gap-3 rounded-[18px] border border-white/10 bg-white/[0.05] p-3.5 md:grid-cols-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">Preferred payout</p>
+                      <p className="mt-1 text-[13px] font-semibold text-white">{selectedSupplier.preferredRail}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">Recipient information</p>
+                      <p className="mt-1 text-[13px] font-semibold text-white">
+                        {selectedSupplier.walletAddress ? `Wallet address ${shortenWalletAddress(selectedSupplier.walletAddress)}` : "Payout details needed"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">Payout memory</p>
+                      <p className="mt-1 text-[13px] font-semibold text-white">{selectedSupplier.historySummary}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {supplierFormOpen ? (
+                  <div className="mt-4 rounded-[22px] border border-white/12 bg-[#102A4F]/82 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[13px] font-semibold text-white">{editingSupplierId ? "Edit supplier" : "Add supplier"}</p>
+                        <p className="mt-1 text-[12px] text-[#C9D4F5]/76">Create a reusable supplier profile for future payouts.</p>
+                      </div>
+                      <button type="button" onClick={() => setSupplierFormOpen(false)} className="rounded-full border border-white/12 px-3 py-1.5 text-[11px] font-semibold text-[#EAF1FF]">
+                        Close
+                      </button>
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <input value={supplierForm.supplierName} onChange={(event) => setSupplierForm((form) => ({ ...form, supplierName: event.target.value }))} placeholder="Supplier name" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                      <input value={supplierForm.companyName} onChange={(event) => setSupplierForm((form) => ({ ...form, companyName: event.target.value }))} placeholder="Business / company" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                      <input value={supplierForm.walletAddress} onChange={(event) => setSupplierForm((form) => ({ ...form, walletAddress: event.target.value }))} placeholder="Recipient wallet address" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                      <select value={supplierForm.preferredRail} onChange={(event) => setSupplierForm((form) => ({ ...form, preferredRail: event.target.value as PayoutRail }))} className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none">
+                        <option>Stablecoin</option>
+                        <option>Bank transfer</option>
+                        <option>Mobile money</option>
+                      </select>
+                      <select value={supplierForm.currency} onChange={(event) => setSupplierForm((form) => ({ ...form, currency: event.target.value as PayoutCurrency }))} className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none">
+                        {payoutCurrencies.map((currency) => <option key={currency}>{currency}</option>)}
+                      </select>
+                      <input value={supplierForm.notes} onChange={(event) => setSupplierForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Payout notes" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {projectOptions.map((project) => {
+                        const active = supplierForm.linkedProjects.includes(project);
+
+                        return (
+                          <button
+                            key={project}
+                            type="button"
+                            onClick={() => setSupplierForm((form) => ({
+                              ...form,
+                              linkedProjects: active
+                                ? form.linkedProjects.filter((item) => item !== project)
+                                : [...form.linkedProjects, project],
+                            }))}
+                            className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${active ? "border-[#D9FF57]/28 bg-[#D9FF57]/12 text-[#F1FFB8]" : "border-white/12 bg-white/[0.06] text-[#C9D4F5]"}`}
+                          >
+                            {project}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button type="button" onClick={handleSaveSupplier} className="mt-4 inline-flex h-10 items-center justify-center rounded-full bg-white px-4 text-[12px] font-semibold text-[#111827]">
+                      Save supplier
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_160px_170px]">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Project</span>
-                  <select value={projectName} onChange={(event) => setProjectName(event.target.value)} className="h-13 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
-                    {projects.map((item) => <option key={item}>{item}</option>)}
+                  <select value={projectName} onChange={(event) => setProjectName(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                    {projectOptions.map((item) => <option key={item}>{item}</option>)}
                   </select>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Reserve / source</span>
-                  <select value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="h-13 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
-                    <option value="available">Available balance</option>
-                    {summary.reserves.map((reserve) => (
-                      <option key={reserve.id} value={reserve.id}>
-                        {reserve.name} · {formatCurrency(reserve.amount)}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">{supplierProjectHint}</span>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Amount</span>
-                  <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="numeric" className="h-13 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none" />
+                  <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44" />
                 </label>
-                <label className="block md:col-span-2">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payment reason</span>
-                  <select value={reason} onChange={(event) => setReason(event.target.value)} className="h-13 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Currency</span>
+                  <select value={payoutCurrency} onChange={(event) => setPayoutCurrency(event.target.value as PayoutCurrency)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                    {payoutCurrencies.map((currency) => <option key={currency} value={currency}>{currency}{currency === "XRP" ? " · available for mainnet test" : " · coming soon"}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payment rail</span>
+                  <select value={preferredRail} onChange={(event) => setPreferredRail(event.target.value as PayoutRail)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                    <option>Stablecoin</option>
+                    <option>Bank transfer</option>
+                    <option>Mobile money</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payout timing</span>
+                  <select value={payoutTiming} onChange={(event) => setPayoutTiming(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                    {payoutTimings.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payout reason</span>
+                  <select value={reason} onChange={(event) => setReason(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
                     {reasons.map((item) => <option key={item}>{item}</option>)}
                   </select>
                 </label>
+                <label className="block">
+                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">What is this payment for?</span>
+                  <select value={linkedMilestone} onChange={(event) => setLinkedMilestone(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
+                    {milestones.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </label>
+                <label className="block lg:col-span-3">
+                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payout notes</span>
+                  <input value={payoutNotes} onChange={(event) => setPayoutNotes(event.target.value)} placeholder="Optional context for this payout" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50" />
+                </label>
               </div>
-              <button type="submit" disabled={!amountValue} className="mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(255,255,255,0.14)] disabled:cursor-not-allowed disabled:opacity-50">
-                Review operational impact
-                <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />
-              </button>
-            </form>
+            </section>
 
-            <aside className="space-y-4">
-              <section className="rounded-[28px] border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(103,232,249,0.12),rgba(16,42,79,0.48))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.10)]">
+            <section className="rounded-[26px] border border-white/12 bg-white/[0.055] p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Step 2 · Choose payment rail</p>
+                  <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-white">Choose how this payout should move.</h3>
+                </div>
+                <p className="text-[12px] text-[#C9D4F5]/76">Stablecoin is available now. Bank and mobile money are prepared for later.</p>
+              </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {[
+                  ["Stablecoin", "Available now", "Fast settlement for cross-border payout coordination."],
+                  ["Bank transfer", "Coming soon", "Multi-currency bank payouts with operational tracking."],
+                  ["Mobile money", "Coming soon", "Regional and field payouts for mobile-first corridors."],
+                ].map(([rail, status, copy]) => {
+                  const active = preferredRail === rail;
+
+                  return (
+                    <button
+                      key={rail}
+                      type="button"
+                      onClick={() => setPreferredRail(rail as PayoutRail)}
+                      className={`rounded-[20px] border p-4 text-left transition ${active ? "border-[#D9FF57]/34 bg-[#D9FF57]/10 shadow-[0_0_24px_rgba(217,255,87,0.08)]" : "border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]"}`}
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="text-[15px] font-semibold text-white">{rail}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${status === "Available now" ? "bg-[#D9FF57]/14 text-[#F1FFB8]" : "bg-white/[0.08] text-[#C9D4F5]"}`}>{status}</span>
+                      </span>
+                      <span className="mt-3 block text-[12px] leading-[1.55] text-[#C9D4F5]/78">{copy}</span>
+                    </button>
+                  );
+                })}
+                </div>
+                <p className="mt-3 text-[12px] leading-[1.55] text-[#FFE8B0]">
+                  XRP is available for the first real test payment. Other currencies stay visible so teams can see what is coming next.
+                </p>
+              </section>
+
+            {payoutMode === "existing" ? (
+              <section className="rounded-[26px] border border-white/12 bg-white/[0.045] p-5">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Existing payments due</p>
+                  <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-white">Choose a starting point, then edit it.</h3>
+                  <p className="mt-2 max-w-[560px] text-[13px] leading-[1.65] text-[#C9D4F5]/78">
+                    These are suggestions from project activity. They never lock the supplier, amount, currency, rail, or reason.
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {projectSuggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      onClick={() => applySuggestion(suggestion)}
+                      className="rounded-[18px] border border-white/10 bg-white/[0.06] p-4 text-left transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.09]"
+                    >
+                      <span className="block text-[14px] font-semibold text-white">{suggestion.title}</span>
+                      <span className="mt-2 block text-[12px] text-[#C9D4F5]/78">{suggestion.projectName} · suggested {formatPayoutAmount(Number(suggestion.amount), suggestion.currency)}</span>
+                      <span className="mt-3 inline-flex rounded-full border border-white/10 bg-white/[0.08] px-2.5 py-1 text-[11px] font-semibold text-[#EAF1FF]">
+                        Fill form
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <section className="grid gap-5 xl:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.58fr)]">
+              <div className="rounded-[28px] border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(103,232,249,0.12),rgba(16,42,79,0.48))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.10)]">
                 <div className="flex items-start gap-3">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/12 bg-white/10 text-[#D9FF57]">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/12 bg-white/10 text-[#D9FF57]">
                     <Sparkles className="h-[16px] w-[16px]" strokeWidth={2} />
                   </span>
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Zila recommendation</p>
-                    <p className="mt-2 text-[18px] font-semibold leading-[1.35] tracking-[-0.035em] text-white">{recommendation}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Step 3 · Review operational impact</p>
+                    <p className="mt-2 text-[19px] font-semibold leading-[1.35] tracking-[-0.035em] text-white">{recommendation}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {[
+                        railSupported ? "Expected to arrive within 1 minute" : `${preferredRail} coming soon`,
+                        currencySupported ? "Payment ready" : `${payoutCurrency} coming soon`,
+                        safeAfter > 0 ? "Reserve still protected" : "Review reserves first",
+                        `Protected balance after payout ${formatCurrency(protectedAfter)}`,
+                      ].map((item) => (
+                        <span key={item} className="rounded-full border border-white/12 bg-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-[#EAF1FF]">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </section>
+              </div>
 
-              <section className="rounded-[28px] border border-white/14 bg-[#F3F5F9]/94 p-5 text-[#111827] shadow-[0_20px_48px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(255,255,255,0.72)]">
+              <div className="rounded-[28px] border border-white/14 bg-[#F3F5F9]/94 p-5 text-[#111827] shadow-[0_20px_48px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(255,255,255,0.72)]">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1D4ED8]">Operational impact</p>
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="mt-4 space-y-2.5">
                   {[
-                    ["Total", summary.totalBalance],
-                    ["Protected", summary.protectedAmount],
-                    ["Committed", summary.committedAmount],
-                    ["Safe now", safeBefore],
-                    ["Total after", totalAfter],
-                    ["Protected after", protectedAfter],
-                    ["Safe after", safeAfter],
+                    ["Reserve remaining after payout", formatCurrency(protectedAfter)],
+                    ["Safe to spend after payout", formatCurrency(safeAfter)],
+                    ["Runway remaining", runwayRemaining],
+                    ["Payment status", risk.label],
+                    ["Proof", proofStatus],
                   ].map(([label, value]) => (
-                    <div key={label as string} className="rounded-[14px] bg-white/72 p-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#65738B]">{label}</p>
-                      <p className="mt-1 text-[15px] font-semibold text-[#111827]">{formatCurrency(value as number)}</p>
+                    <div key={label} className="flex items-center justify-between gap-4 rounded-[14px] bg-white/72 px-3.5 py-3">
+                      <span className="text-[12px] font-medium text-[#65738B]">{label}</span>
+                      <strong className="text-right text-[13px] font-semibold text-[#111827]">{value}</strong>
                     </div>
                   ))}
-                  <div className={`rounded-[14px] border p-3 ${risk.tone}`}>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em]">Risk</p>
-                    <p className="mt-1 text-[15px] font-semibold">{risk.label}</p>
-                  </div>
                 </div>
-                <p className="mt-4 text-[12px] leading-[1.55] text-[#526078]">
-                  Reserve impact: {selectedReserve ? `${formatCurrency(Math.min(amountValue, selectedReserve.amount))} used from ${selectedReserve.name}.` : "Available balance will fund this payment."}
-                </p>
-                <p className="mt-2 text-[12px] leading-[1.55] text-[#526078]">
-                  Project impact: {projectName} pressure updates after confirmation.
-                </p>
-              </section>
-            </aside>
-          </div>
-        )}
+              </div>
+            </section>
 
-        {flowState === "review" ? (
-          <div className="mt-6 rounded-[26px] border border-white/14 bg-[#102A4F]/72 p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.10)]">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Review ready</p>
-                <p className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-white">
-                  {formatCurrency(amountValue)} to {recipient} from {sourceLabel}
-                </p>
-                <p className="mt-1 text-[13px] text-[#C9D4F5]">{recommendation}</p>
-              </div>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setFlowState("details")} className="h-11 rounded-full border border-white/14 bg-white/[0.08] px-4 text-[13px] font-semibold text-[#EAF1FF]">
-                  Edit
+            <section className="rounded-[24px] border border-white/12 bg-white/[0.06] p-4">
+              <button
+                type="button"
+                onClick={() => setAdvancedOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <span>
+                  <span className="block text-[13px] font-semibold text-white">More payout details</span>
+                  <span className="mt-1 block text-[12px] text-[#C9D4F5]/76">Recipient wallet address, money source, and proof settings.</span>
+                </span>
+                <ChevronDown className={`h-[18px] w-[18px] text-[#C9D4F5] transition ${advancedOpen ? "rotate-180" : ""}`} strokeWidth={2} />
+              </button>
+
+              {advancedOpen ? (
+                <div className="mt-4 grid gap-4 border-t border-white/10 pt-4 md:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Recipient wallet address</span>
+                    <input value={destinationAddress} onChange={(event) => setDestinationAddress(event.target.value)} placeholder="Recipient XRPL address" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50" />
+                    <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">Compatible XRPL wallet address (Xaman or any XRPL-supported wallet).</span>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Money source</span>
+                    <select value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
+                      {reserveOptions.map((reserve) => (
+                        <option key={reserve.id} value={reserve.id}>
+                          {reserve.name} · {formatCurrency(reserve.amount)} available
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">{selectedReserveOption.explanation}</span>
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Manual proof settings</span>
+                    <select value="Attach automatically" disabled className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F]/80 px-4 text-[14px] text-white outline-none opacity-90">
+                      <option>Attach automatically</option>
+                    </select>
+                    <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">Zila creates the proof record after settlement confirmation.</span>
+                  </label>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="rounded-[28px] border border-[#D9FF57]/18 bg-[linear-gradient(180deg,rgba(217,255,87,0.10),rgba(16,42,79,0.52))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),0_0_24px_rgba(217,255,87,0.05),inset_0_1px_0_rgba(255,255,255,0.10)]">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F1FFB8]">Approval</p>
+                  <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.045em] text-white">Review this payout before sending.</h2>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {[
+                      ["Payee", recipient],
+                      ["Connected wallet", moneySource.connected ? moneySource.walletAddressShort || "Connected" : "Not connected"],
+                      ["Amount", formatPayoutAmount(amountValue, payoutCurrency)],
+                      ["Estimated arrival", estimatedArrival],
+                      ["Money source", sourceLabel],
+                      ["Proof history", "Appears after payment"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-[16px] border border-white/10 bg-white/[0.08] px-3.5 py-3">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C9D4F5]">{label}</p>
+                        <p className="mt-1 text-[13px] font-semibold text-white">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {!currencySupported || !railSupported ? (
+                    <p className="mt-3 text-[12px] font-medium text-[#FFE8B0]">
+                      {payoutCurrency} via {preferredRail} is coming soon. XRP through Stablecoin is available for the first real test payment.
+                    </p>
+                  ) : paymentMessage ? <p className="mt-3 text-[12px] font-medium text-[#FFE8B0]">{paymentMessage}</p> : null}
+                </div>
+                <button type="button" onClick={handleConfirm} disabled={flowState === "processing"} className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(217,255,87,0.16)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_42px_rgba(217,255,87,0.22)] disabled:cursor-not-allowed disabled:opacity-50">
+                  Review payout
+                  <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />
                 </button>
-                <button type="button" onClick={handleConfirm} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-[#111827]">
-                  Confirm payment
-                  <MoveRight className="h-[14px] w-[14px]" strokeWidth={2} />
-                </button>
               </div>
-            </div>
-            {!moneySource.connected ? (
-              <div className="mt-4 rounded-[18px] border border-amber-200/22 bg-amber-300/[0.09] px-4 py-4">
-                <p className="text-[13px] font-semibold text-[#FFE8B0]">Connect your money before confirming this payment.</p>
-                <Link href="/payments/connect-account" className="mt-3 inline-flex h-10 items-center justify-center rounded-full bg-white px-4 text-[12px] font-semibold text-[#111827]">
-                  Connect money
-                </Link>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+            </section>
+          </form>
+        )}
 
         {activePayload && (flowState === "awaiting-signature" || flowState === "signing") ? (
           <section className="mt-6 rounded-[26px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.12),rgba(16,42,79,0.62))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.10)]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <Image
-                src={activePayload.qrPng}
+                src={activePayload.qrUrl}
                 alt="Xaman signing QR code"
                 width={136}
                 height={136}
@@ -627,7 +1322,7 @@ export function SendMoneyScreen() {
                   Zila will record the operational amount, project, source, and transaction reference after confirmation.
                 </p>
                 <Link
-                  href={activePayload.url}
+                  href={activePayload.deepLink}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-white px-4 text-[13px] font-semibold text-[#111827]"
@@ -645,7 +1340,7 @@ export function SendMoneyScreen() {
             <button
               type="button"
               onClick={() => {
-                setFlowState("review");
+                setFlowState("details");
                 setPaymentMessage(null);
                 setActivePayload(null);
               }}

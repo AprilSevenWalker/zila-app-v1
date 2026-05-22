@@ -1,5 +1,5 @@
-import { WelcomeScreen } from "@/components/welcome/WelcomeScreen";
+import { SignInScreen } from "@/components/signin/SignInScreen";
 
-export default function WelcomePage() {
-  return <WelcomeScreen />;
+export default function AuthPage() {
+  return <SignInScreen />;
 }

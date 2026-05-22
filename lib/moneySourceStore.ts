@@ -3,6 +3,10 @@ export interface MoneySourceState {
   sourceLabel: string;
   walletAddress: string;
   walletAddressShort: string;
+  status?: "not-connected" | "connecting" | "connected" | "ready" | "payment-pending" | "transaction-confirmed";
+  network?: string;
+  proofEnabled?: boolean;
+  connectedAtIso?: string;
 }
 
 const STORAGE_KEY = "zila-money-source";
@@ -18,6 +22,9 @@ function defaultState(): MoneySourceState {
     sourceLabel: "Stable balance",
     walletAddress: "",
     walletAddressShort: "",
+    status: "not-connected",
+    network: "XRPL Mainnet",
+    proofEnabled: false,
   };
 }
 
@@ -33,6 +40,10 @@ function safeParse(value: string | null): MoneySourceState {
       sourceLabel: parsed.sourceLabel || "Stable balance",
       walletAddress: parsed.walletAddress || "",
       walletAddressShort: parsed.walletAddressShort || "",
+      status: parsed.status || (parsed.connected ? "ready" : "not-connected"),
+      network: parsed.network || "XRPL Mainnet",
+      proofEnabled: parsed.proofEnabled ?? Boolean(parsed.connected),
+      connectedAtIso: parsed.connectedAtIso,
     };
   } catch {
     return defaultState();
@@ -52,7 +63,13 @@ export function saveMoneySourceState(state: MoneySourceState) {
     return;
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    ...state,
+    status: state.status || (state.connected ? "ready" : "not-connected"),
+    network: state.network || "XRPL Mainnet",
+    proofEnabled: state.proofEnabled ?? state.connected,
+    connectedAtIso: state.connectedAtIso || (state.connected ? new Date().toISOString() : undefined),
+  }));
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT, { detail: state }));
 }
 

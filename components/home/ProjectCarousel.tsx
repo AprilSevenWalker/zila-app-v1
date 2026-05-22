@@ -4,7 +4,7 @@ import { ArrowRight, Clock3, FolderKanban, ShieldCheck } from "lucide-react";
 import { projects } from "@/data/projects";
 
 const actionByTone = {
-  warning: "Move funds",
+  warning: "Coordinate payout",
   success: "Review spend",
   info: "Refresh forecast",
   neutral: "Review project",

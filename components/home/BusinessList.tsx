@@ -11,24 +11,33 @@ import {
   subscribeToAskOperationalUpdates,
   type AskOperationalUpdate,
 } from "@/lib/askOperationalStore";
+import {
+  getLatestPaymentTransaction,
+  subscribeToLatestPaymentTransaction,
+  type LatestPaymentTransaction,
+} from "@/lib/paymentTransactionStore";
 
 export function BusinessList() {
   const [latestReserveActivity, setLatestReserveActivity] = useState<ReserveActivity | null>(null);
   const [latestAskUpdate, setLatestAskUpdate] = useState<AskOperationalUpdate | null>(null);
+  const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
 
   useEffect(() => {
     const update = () => {
       setLatestReserveActivity(getProtectedMoneyState().activity[0] ?? null);
       setLatestAskUpdate(getAskOperationalUpdates()[0] ?? null);
+      setLatestPayment(getLatestPaymentTransaction());
     };
 
     update();
     const unsubscribeProtected = subscribeToProtectedMoney(update);
     const unsubscribeAsk = subscribeToAskOperationalUpdates(update);
+    const unsubscribePayment = subscribeToLatestPaymentTransaction(update);
 
     return () => {
       unsubscribeProtected();
       unsubscribeAsk();
+      unsubscribePayment();
     };
   }, []);
 
@@ -82,10 +91,10 @@ export function BusinessList() {
               <FolderKanban className="h-[17px] w-[17px]" strokeWidth={1.75} />
             </IconTile>
           }
-          title="Project Horizon"
-          subtitle="Supplier payment due Friday"
-          badge="Watch"
-          badgeColor="border border-[#8F7CFF]/24 bg-[#8F7CFF]/12 text-[#DCD6FF]"
+          title={latestPayment?.projectName ?? "Project Horizon"}
+          subtitle={latestPayment ? `${latestPayment.recipientName ?? "Supplier"} payout settled` : "Supplier payment due Friday"}
+          badge={latestPayment ? "Settled" : "Watch"}
+          badgeColor={latestPayment ? "border border-[#D7FF4F]/24 bg-[#D7FF4F]/10 text-[#F1FFB8]" : "border border-[#8F7CFF]/24 bg-[#8F7CFF]/12 text-[#DCD6FF]"}
           href="/projects"
         />
         <ChapterRow
@@ -99,9 +108,9 @@ export function BusinessList() {
             </IconTile>
           }
           title="Payment activity"
-          subtitle="$4.3K linked to Project Horizon"
-          badge="Due soon"
-          badgeColor="border border-[#2F80FF]/24 bg-[#2F80FF]/12 text-[#BFD9FF]"
+          subtitle={latestPayment ? `${latestPayment.amountLabel} synced to Proof` : "$4.3K linked to Project Horizon"}
+          badge={latestPayment ? "Synced" : "Due soon"}
+          badgeColor={latestPayment ? "border border-[#D7FF4F]/24 bg-[#D7FF4F]/10 text-[#F1FFB8]" : "border border-[#2F80FF]/24 bg-[#2F80FF]/12 text-[#BFD9FF]"}
           href="/payments"
         />
         <ChapterRow
@@ -115,7 +124,7 @@ export function BusinessList() {
             </IconTile>
           }
           title="Proof of Operations"
-          subtitle="13 days of verified project activity"
+          subtitle={latestPayment ? "Latest payout generated verified history" : "13 days of verified project activity"}
           badge="Verified"
           badgeColor="border border-[#D7FF4F]/24 bg-[#D7FF4F]/10 text-[#F1FFB8]"
           href="/proof"

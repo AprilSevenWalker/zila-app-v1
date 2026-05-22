@@ -8,8 +8,9 @@ import { ArrowRight, ArrowUpRight, CheckCircle2, Copy, LoaderCircle, MoveRight, 
 
 import { getMoneySourceState, saveMoneySourceState, subscribeToMoneySource } from "@/lib/moneySourceStore";
 import { clearPaymentDraft, getPaymentDraft, subscribeToPaymentDraft } from "@/lib/paymentDraftStore";
-import { saveLatestPaymentTransaction } from "@/lib/paymentTransactionStore";
+import { saveLatestPaymentTransaction, savePaymentMovement } from "@/lib/paymentTransactionStore";
 import { formatTransactionHash, saveProofTransaction, shortenWalletAddress } from "@/lib/proofTransactionStore";
+import { recordPaymentReserveRecalculation } from "@/lib/protectedMoneyStore";
 
 type PaymentStatus = "idle" | "connecting" | "preparing" | "awaiting-signature" | "submitted" | "confirmed";
 
@@ -189,11 +190,40 @@ export function MakePaymentScreen() {
     setPaymentStatus("confirmed");
     setPaymentMessage("Payment confirmed on XRPL Mainnet.");
 
+    savePaymentMovement({
+      id: `payment-movement-${payload.response.txid}`,
+      type: "outgoing",
+      title: "Supplier payout completed",
+      amountLabel: pendingPayment.amountLabel,
+      amountValue: pendingPayment.amountValue,
+      status: "Verified",
+      project: pendingPayment.projectName,
+      sourceLabel: "Xaman wallet",
+      recipientName: "Supplier",
+      reason: "Supplier payout",
+      txHash: payload.response.txid,
+      explorerUrl: buildExplorerUrl(payload.response.txid),
+      createdAtIso: resolvedAt,
+    });
+    recordPaymentReserveRecalculation({
+      amount: pendingPayment.amountValue,
+      amountLabel: pendingPayment.amountLabel,
+      projectName: pendingPayment.projectName,
+      recipientName: "Supplier",
+      txHash: payload.response.txid,
+    });
     saveLatestPaymentTransaction({
       txid: payload.response.txid,
       amountLabel: pendingPayment.amountLabel,
       amountValue: pendingPayment.amountValue,
       projectName: pendingPayment.projectName,
+      recipientName: "Supplier",
+      sourceLabel: "Xaman wallet",
+      paymentReason: "Supplier payout",
+      movementType: "outgoing",
+      verificationState: "Verified",
+      transferStatus: "Completed",
+      obligationStatus: "Settled",
       walletAddress: account,
       network: "XRPL Mainnet",
       createdAtIso: resolvedAt,

@@ -1,16 +1,23 @@
 import { Xumm } from "xumm";
 
-function requireEnv(name: "XAMAN_API_KEY" | "XAMAN_API_SECRET" | "XRPL_MAINNET_DESTINATION_ADDRESS") {
-  const value = process.env[name];
+import { readServerEnv } from "@/lib/serverEnv";
+
+function requireEnv(name: "XAMAN_API_KEY" | "XAMAN_API_SECRET" | "XRPL_MAINNET_DESTINATION_ADDRESS", fallback?: string) {
+  const value = readServerEnv(name, fallback);
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+    if (name === "XAMAN_API_KEY" || name === "XAMAN_API_SECRET") {
+      throw new Error("Missing Xaman API credentials");
+    }
+
+    throw new Error(`Missing required environment variable: ${name}${fallback ? ` or ${fallback}` : ""}`);
   }
 
   return value;
 }
 
 export function getXamanClient() {
-  return new Xumm(requireEnv("XAMAN_API_KEY"), requireEnv("XAMAN_API_SECRET"));
+  // Prefer the current Xumm env names, with legacy Xaman names supported for older local setups.
+  return new Xumm(requireEnv("XAMAN_API_KEY", "XUMM_API_KEY"), requireEnv("XAMAN_API_SECRET", "XUMM_API_SECRET"));
 }
 
 export function getMainnetDestinationAddress() {

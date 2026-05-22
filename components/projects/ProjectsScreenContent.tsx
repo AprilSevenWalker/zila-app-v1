@@ -1,13 +1,18 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState } from "react";
-import { Activity, AlertTriangle, ArrowLeft, ArrowRight, CircleDollarSign, ReceiptText } from "lucide-react";
+import { ArrowRight, CircleDollarSign, CreditCard, ReceiptText } from "lucide-react";
 
 import type { Project } from "@/data/projects";
 import { getSignalVariant, ZilaSignal } from "@/components/projects/ZilaSignal";
 import { Pill } from "@/components/ui/Pill";
+import {
+  getLatestPaymentTransaction,
+  subscribeToLatestPaymentTransaction,
+  type LatestPaymentTransaction,
+} from "@/lib/paymentTransactionStore";
 
 type HumanActivity = {
   person: string;
@@ -170,16 +175,60 @@ function projectAccentClass(tone: Project["statusTone"]) {
   return "from-[#8FA7C7] via-[#486784] to-transparent";
 }
 
-function projectProgressClass(tone: Project["statusTone"]) {
+function getProjectOperations(project: Project) {
+  const pressure = project.statusTone === "warning";
+
+  return {
+    runway: pressure ? (project.id === "harbour-road" ? "Runway tight by Friday" : "Close-out runway tight") : project.id === "north-block" ? "Runway stable for 15 days" : "Runway stable for 12 days",
+    payout: pressure ? (project.id === "harbour-road" ? "Supplier payout overlaps Friday" : "Payment clearance due next") : "No payout cluster detected",
+    reserve: pressure ? "Reserve review recommended" : "Reserve remains protected",
+    activity: pressure ? "Pressure building" : "Normal operating rhythm",
+    recommendation: pressure ? project.nextMoveSummary : project.zilaSuggestionShort,
+  };
+}
+
+const portfolioInsights = [
+  "2 supplier payouts overlap Friday.",
+  "Reserve remains protected after delivery payout.",
+  "Northstar approaching pressure threshold.",
+  "Atlas runway stable for 12 days.",
+];
+
+function getProjectInsights(project: Project) {
+  const operations = getProjectOperations(project);
+
+  return [
+    operations.recommendation,
+    operations.reserve,
+  ];
+}
+
+function paymentMatchesProject(payment: LatestPaymentTransaction | null, project: Project) {
+  if (!payment) {
+    return false;
+  }
+
+  return [project.name, project.client, project.id].some((value) => value.toLowerCase() === payment.projectName.toLowerCase());
+}
+
+function getPaymentProjectId(payment: LatestPaymentTransaction | null, projects: Project[]) {
+  if (!payment) {
+    return null;
+  }
+
+  return projects.find((project) => paymentMatchesProject(payment, project))?.id ?? null;
+}
+
+function pageAtmosphereClass(tone: Project["statusTone"]) {
   if (tone === "warning") {
-    return "bg-[linear-gradient(90deg,#8A6738,#D0A15B)] shadow-[0_0_10px_rgba(185,139,74,0.22)]";
+    return "before:bg-[radial-gradient(circle_at_78%_32%,rgba(185,139,74,0.16),transparent_30%),radial-gradient(circle_at_18%_64%,rgba(103,232,249,0.08),transparent_34%)]";
   }
 
   if (tone === "success") {
-    return "bg-[linear-gradient(90deg,#2F80FF,#67E8F9)] shadow-[0_0_12px_rgba(103,232,249,0.22)]";
+    return "before:bg-[radial-gradient(circle_at_78%_28%,rgba(217,255,87,0.09),transparent_26%),radial-gradient(circle_at_18%_64%,rgba(103,232,249,0.13),transparent_34%)]";
   }
 
-  return "bg-[linear-gradient(90deg,#486784,#9FB7D6)] shadow-[0_0_10px_rgba(159,183,214,0.14)]";
+  return "before:bg-[radial-gradient(circle_at_78%_30%,rgba(103,232,249,0.10),transparent_30%),radial-gradient(circle_at_18%_64%,rgba(143,167,199,0.10),transparent_34%)]";
 }
 
 function LivePulse({ label = "Live" }: { label?: string }) {
@@ -193,14 +242,20 @@ function LivePulse({ label = "Live" }: { label?: string }) {
   );
 }
 
-function FeaturedProjectCard({ project, isActive }: { project: Project; isActive: boolean }) {
+function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Project; isActive: boolean; latestPayment: LatestPaymentTransaction | null }) {
   const latestUpdate = activityByProject[project.id]?.[0];
+  const operations = getProjectOperations(project);
+  const paymentSynced = paymentMatchesProject(latestPayment, project);
+  const operationChips = paymentSynced
+    ? ["Supplier payout completed", "Reserve recalculated", "Proof generated"]
+    : [operations.runway, operations.payout, operations.reserve];
 
   return (
-    <article className={`zila-surface-grain relative min-h-[430px] overflow-hidden rounded-[32px] border border-white/12 bg-[linear-gradient(145deg,#030815_0%,#0D1731_46%,#172D58_100%)] p-6 text-white shadow-[0_20px_60px_rgba(0,0,0,0.15),0_34px_86px_rgba(15,23,42,0.34),0_0_44px_rgba(34,211,238,0.10),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl transition-all duration-700 ease-out md:p-7 ${isActive ? "scale-100 opacity-100" : "scale-[0.94] opacity-65"}`}>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.22),transparent_32%),radial-gradient(circle_at_84%_6%,rgba(217,255,87,0.08),transparent_24%)]" />
-      <div className="relative flex min-h-[382px] flex-col">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <Link href={`/projects/${project.id}`} className={`group zila-surface-grain zila-hero-system-glow relative block min-h-[350px] cursor-pointer overflow-hidden rounded-[28px] border border-white/12 bg-[linear-gradient(145deg,#030815_0%,#0D1731_46%,#172D58_100%)] p-4.5 text-white shadow-[0_20px_60px_rgba(0,0,0,0.15),0_34px_86px_rgba(15,23,42,0.34),0_0_44px_rgba(34,211,238,0.10),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl transition-all duration-700 ease-out hover:-translate-y-1 hover:border-[#D9FF57]/22 hover:shadow-[0_26px_70px_rgba(0,0,0,0.18),0_40px_96px_rgba(15,23,42,0.36),0_0_52px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.12)] md:p-5 ${isActive ? "scale-100 opacity-100" : "scale-[0.94] opacity-65"}`}>
+      <div className="zila-hero-ambient absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.22),transparent_32%),radial-gradient(circle_at_84%_6%,rgba(217,255,87,0.08),transparent_24%)]" />
+      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(217,255,87,0.36),transparent)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="relative flex min-h-[304px] flex-col">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/12 bg-[linear-gradient(135deg,#1D4ED8,#0EA5E9)] text-[#F8FBFF] shadow-[0_0_28px_rgba(103,232,249,0.20),inset_0_1px_0_rgba(255,255,255,0.14)]">
@@ -208,11 +263,23 @@ function FeaturedProjectCard({ project, isActive }: { project: Project; isActive
               </span>
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#DCE7FA]">Live project</p>
-                <h2 className="mt-1 text-[36px] font-semibold leading-none tracking-[-0.07em] text-white md:text-[44px]">{project.name}</h2>
+                <h2 className="mt-1 text-[30px] font-semibold leading-none tracking-[-0.07em] text-white md:text-[36px]">{project.name}</h2>
               </div>
             </div>
-            <p className="mt-6 max-w-[620px] text-[24px] font-semibold leading-[1.24] tracking-[-0.045em] text-white">{project.stateSignal}</p>
-          </div>
+              <p className="mt-4 max-w-[600px] text-[19px] font-semibold leading-[1.24] tracking-[-0.045em] text-white">{project.stateSignal}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {operationChips.map((item, index) => (
+                  <span key={item} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${
+                    index === 0
+                      ? "border-[#D9FF57]/18 bg-[#D9FF57]/[0.075] text-[#EAFFB4]"
+                      : "border-white/10 bg-white/[0.055] text-[#D7E3F8]"
+                  }`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${index === 0 ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"}`} />
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <LivePulse label="Updating live" />
             <Pill tone={project.statusTone} className={`w-fit ${projectPillClass(project.statusTone)}`}>
@@ -221,7 +288,7 @@ function FeaturedProjectCard({ project, isActive }: { project: Project; isActive
           </div>
         </div>
 
-        <div className="mt-auto grid gap-6 pt-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(300px,0.78fr)] lg:items-end">
+        <div className="mt-auto grid gap-4 pt-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(260px,0.74fr)] lg:items-end">
           <div>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-x-8 gap-y-5">
               <MoneyMetric label="Budget" value={project.budget} dark />
@@ -229,7 +296,7 @@ function FeaturedProjectCard({ project, isActive }: { project: Project; isActive
               <MoneyMetric label="Spent" value={project.spent} dark />
             </div>
 
-            <div className="mt-6">
+            <div className="mt-5">
               <div className="flex h-2.5 overflow-hidden rounded-full bg-white/10">
                 <div
                   className="rounded-full bg-[linear-gradient(90deg,#2F80FF,#67E8F9)] shadow-[0_0_18px_rgba(103,232,249,0.30)]"
@@ -242,23 +309,38 @@ function FeaturedProjectCard({ project, isActive }: { project: Project; isActive
               </div>
             </div>
 
-            <div className="mt-6 rounded-[22px] border border-[#67E8F9]/28 bg-[#071526]/68 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
+            <div className="mt-4 rounded-[18px] border border-[#67E8F9]/28 bg-[#071526]/68 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition group-hover:border-[#D9FF57]/20 group-hover:bg-[#071526]/78">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D9FAFF]">Next recommendation</p>
-              <p className="mt-2 text-[17px] font-semibold leading-[1.35] tracking-[-0.025em] text-white">{project.nextMoveSummary}</p>
+              <p className="mt-2 text-[15px] font-semibold leading-[1.35] tracking-[-0.025em] text-white">
+                {paymentSynced
+                  ? `${latestPayment?.amountLabel} payout cleared. Runway and proof history are now synced.`
+                  : operations.recommendation}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+                {["Open operational detail", "Review payouts", "View proof history"].map((action) => (
+                  <span key={action} className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-[11px] font-semibold text-[#D7E3F8]">
+                    {action}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-white/12 bg-[#071526]/54 p-4 shadow-[0_20px_42px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md">
+          <div className="rounded-[20px] border border-white/12 bg-[#071526]/54 p-3 shadow-[0_20px_42px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md">
             <div className="mb-4 flex items-center justify-between gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#DCE7FA]">Activity snippet</p>
               <span className="text-[11px] font-semibold text-[#E8FCFF]">{project.updatedAt}</span>
             </div>
             <div className="space-y-3">
               <div className="relative flex gap-3">
-                <span className="mt-1.5 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#67E8F9] shadow-[0_0_14px_rgba(103,232,249,0.34)]" />
+                <span className="zila-live-dot mt-1.5 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#D9FF57] shadow-[0_0_14px_rgba(217,255,87,0.28)]" />
                 <div>
-                  <p className="text-[14px] font-semibold text-white">{latestUpdate?.action ?? "Operational activity recorded"}</p>
-                  <p className="mt-1 text-[12px] font-medium leading-[1.55] text-[#E0EAF8]">{latestUpdate?.impact ?? project.lastVerifiedAction ?? "Project state refreshed"}</p>
+                  <p className="text-[14px] font-semibold text-white">
+                    {paymentSynced ? "completed supplier payout" : latestUpdate?.action ?? "Operational activity recorded"}
+                  </p>
+                  <p className="mt-1 text-[12px] font-medium leading-[1.55] text-[#E0EAF8]">
+                    {paymentSynced ? `${latestPayment?.amountLabel} moved · reserve and proof updated` : latestUpdate?.impact ?? project.lastVerifiedAction ?? "Project state refreshed"}
+                  </p>
                 </div>
               </div>
               <div className="relative flex gap-3">
@@ -272,160 +354,318 @@ function FeaturedProjectCard({ project, isActive }: { project: Project; isActive
                   <p className="mt-1 text-[12px] font-medium leading-[1.55] text-[#E0EAF8]">{getOperationalSignal(project).detail}</p>
                 </div>
               </div>
+              <div className="relative flex gap-3">
+                <span className="mt-1.5 inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#67E8F9]/80 shadow-[0_0_14px_rgba(103,232,249,0.20)]" />
+                <div>
+                  <p className="text-[14px] font-semibold text-white">Treasury coordination signal</p>
+                  <p className="mt-1 text-[12px] font-medium leading-[1.55] text-[#E0EAF8]">{operations.activity} · {operations.reserve}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </article>
+    </Link>
   );
 }
 
-function FeaturedProjectCarousel({ projects }: { projects: Project[] }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const touchStartX = useRef<number | null>(null);
-
-  const moveTo = (nextIndex: number) => {
-    setActiveIndex((nextIndex + projects.length) % projects.length);
-  };
-
-  const handleTouchEnd = (clientX: number) => {
-    if (touchStartX.current === null) {
-      return;
-    }
-
-    const delta = clientX - touchStartX.current;
-    touchStartX.current = null;
-
-    if (Math.abs(delta) < 42) {
-      return;
-    }
-
-    moveTo(delta < 0 ? activeIndex + 1 : activeIndex - 1);
-  };
+function ProjectRailTile({
+  project,
+  isSelected,
+  onSelect,
+  latestPayment,
+  isDuplicate = false,
+}: {
+  project: Project;
+  isSelected: boolean;
+  onSelect: (projectId: string) => void;
+  latestPayment: LatestPaymentTransaction | null;
+  isDuplicate?: boolean;
+}) {
+  const operations = getProjectOperations(project);
+  const pressure = project.statusTone === "warning";
+  const paymentSynced = paymentMatchesProject(latestPayment, project);
 
   return (
-    <section className="relative overflow-hidden">
-      <div
-        className="overflow-hidden px-1 py-1 md:px-8"
-        onTouchStart={(event) => {
-          touchStartX.current = event.touches[0]?.clientX ?? null;
-        }}
-        onTouchEnd={(event) => {
-          handleTouchEnd(event.changedTouches[0]?.clientX ?? 0);
-        }}
-      >
-        <div
-          className="flex gap-5 transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)]"
-          style={{ transform: `translateX(calc(${activeIndex === 0 ? "0%" : "7%"} - ${activeIndex * 88}%))` }}
-        >
-          {projects.map((project, index) => (
-            <div key={project.id} className="w-[86%] shrink-0">
-              <FeaturedProjectCard project={project} isActive={index === activeIndex} />
-            </div>
-          ))}
+    <button
+      type="button"
+      onClick={() => onSelect(project.id)}
+      tabIndex={isDuplicate ? -1 : 0}
+      className={`group relative min-w-[270px] flex-1 overflow-hidden rounded-[22px] border p-3.5 text-left transition-all duration-500 hover:-translate-y-0.5 ${
+        isSelected
+          ? "border-[#D9FF57]/34 bg-[linear-gradient(180deg,rgba(217,255,87,0.11),rgba(7,21,38,0.74))] shadow-[0_20px_46px_rgba(217,255,87,0.08),0_0_30px_rgba(217,255,87,0.07),inset_0_1px_0_rgba(255,255,255,0.10)]"
+          : pressure
+            ? "border-[#B98B4A]/22 bg-[linear-gradient(180deg,rgba(185,139,74,0.10),rgba(7,21,38,0.64))] shadow-[0_18px_40px_rgba(185,139,74,0.05),inset_0_1px_0_rgba(255,255,255,0.08)]"
+            : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(7,21,38,0.52))] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]"
+      }`}
+      aria-pressed={isSelected}
+    >
+      <span className={`absolute inset-x-4 top-0 h-px bg-gradient-to-r ${isSelected ? "from-transparent via-[#D9FF57] to-transparent" : projectAccentClass(project.statusTone)}`} />
+      <span className={`pointer-events-none absolute inset-0 transition-opacity duration-500 ${isSelected ? "opacity-100" : "opacity-0"} bg-[radial-gradient(circle_at_22%_0%,rgba(217,255,87,0.10),transparent_34%)]`} />
+      <div className="relative flex items-start justify-between gap-5">
+        <div className="min-w-0">
+          <p className="truncate text-[18px] font-semibold tracking-[-0.045em] text-white">{project.name}</p>
+          <p className="mt-2 text-[13px] font-semibold leading-[1.45] text-[#D7E3F8]">
+            {paymentSynced ? "Payout synced to proof" : operations.runway}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${isSelected ? "border-[#D9FF57]/22 bg-[#D9FF57]/[0.10] text-[#EAFFB4]" : pressureClass(project.statusTone)}`}>
+          {paymentSynced ? "Synced" : isSelected ? "Focused" : pressure ? "Pressure" : "Stable"}
+        </span>
+      </div>
+
+      <div className="relative mt-4 flex items-start gap-3 rounded-[17px] border border-white/8 bg-white/[0.035] px-3 py-2.5">
+        <span className={`${isSelected || pressure ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"} mt-1.5 h-2 w-2 shrink-0 rounded-full`} />
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8FA4C3]">Signal</p>
+          <p className="mt-1 text-[12px] font-semibold leading-[1.45] text-[#D7E3F8]">
+            {paymentSynced ? `${latestPayment?.amountLabel} proof generated` : pressure ? operations.payout : operations.reserve}
+          </p>
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-4 px-1 md:px-8">
-        <div className="flex items-center gap-2">
-          {projects.map((project, index) => (
-            <button
-              key={`${project.id}-dot`}
-              type="button"
-              onClick={() => moveTo(index)}
-              className={`h-2 rounded-full transition-all ${index === activeIndex ? "w-8 bg-[#10233F]" : "w-2 bg-[#7FA9D1]"}`}
-              aria-label={`Show ${project.name}`}
-            />
-          ))}
+      <div className="relative mt-4 flex items-center justify-between border-t border-white/10 pt-3">
+        <p className="text-[11px] font-semibold text-[#D9FF57]">{project.remaining} remaining</p>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#AFC0DD] transition group-hover:text-white">
+          Focus
+          <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" strokeWidth={2} />
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function pressureClass(tone: Project["statusTone"]) {
+  if (tone === "warning") {
+    return "border-[#B98B4A]/32 bg-[#B98B4A]/12 text-[#F0C777]";
+  }
+
+  if (tone === "success") {
+    return "border-[#D9FF57]/18 bg-[#D9FF57]/[0.075] text-[#EAFFB4]";
+  }
+
+  return "border-white/10 bg-white/[0.055] text-[#D7E3F8]";
+}
+
+function OperationalRail({
+  projects,
+  selectedProjectId,
+  onSelectProject,
+  latestPayment,
+}: {
+  projects: Project[];
+  selectedProjectId: string;
+  onSelectProject: (projectId: string) => void;
+  latestPayment: LatestPaymentTransaction | null;
+}) {
+  const railProjects = projects.length > 0 ? projects : [];
+
+  return (
+    <section className="relative overflow-hidden rounded-[30px] border border-white/8 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.09),transparent_32%),linear-gradient(180deg,rgba(7,21,38,0.34),rgba(7,17,31,0.58))] p-4 shadow-[0_24px_58px_rgba(6,16,31,0.15),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl md:p-4.5">
+      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.30),rgba(217,255,87,0.16),transparent)]" />
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#7EE7F6]">Operational rail</p>
+          <p className="mt-1 text-[15px] font-semibold tracking-[-0.025em] text-white">Projects moving through the coordination system.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => moveTo(activeIndex - 1)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#BFD5EF] bg-white/70 text-[#10233F] shadow-[0_12px_24px_rgba(31,68,116,0.08)] transition hover:-translate-y-0.5"
-            aria-label="Previous project"
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            onClick={() => moveTo(activeIndex + 1)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#BFD5EF] bg-white/70 text-[#10233F] shadow-[0_12px_24px_rgba(31,68,116,0.08)] transition hover:-translate-y-0.5"
-            aria-label="Next project"
-          >
-            <ArrowRight className="h-4 w-4" strokeWidth={2} />
-          </button>
+        <span className="inline-flex items-center gap-2 rounded-full border border-[#D9FF57]/14 bg-[#D9FF57]/[0.065] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#EAFFB4]">
+          <span className="zila-live-dot h-1.5 w-1.5 rounded-full bg-[#D9FF57]" />
+          Coordinated
+        </span>
+      </div>
+      <div className="relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-[linear-gradient(90deg,rgba(7,17,31,0.95),transparent)]" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-[linear-gradient(270deg,rgba(7,17,31,0.95),transparent)]" />
+        <div className="zila-operational-rail-track flex w-max gap-4 pb-1">
+          {[...railProjects, ...railProjects].map((project, index) => (
+            <div key={`${project.id}-${index}`} aria-hidden={index >= railProjects.length ? "true" : undefined}>
+              <ProjectRailTile
+                project={project}
+                isSelected={project.id === selectedProjectId}
+                onSelect={onSelectProject}
+                latestPayment={latestPayment}
+                isDuplicate={index >= railProjects.length}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-function ProjectSmartCard({ project }: { project: Project }) {
-  const signal = getOperationalSignal(project);
+function PortfolioIntelligencePanel({
+  selectedProject,
+  attentionProjects,
+  latestPayment,
+}: {
+  selectedProject: Project;
+  attentionProjects: Project[];
+  latestPayment: LatestPaymentTransaction | null;
+}) {
+  const paymentSynced = paymentMatchesProject(latestPayment, selectedProject);
+  const selectedInsights = paymentSynced
+    ? [
+        `${latestPayment?.amountLabel} supplier payout cleared and reduced active obligation pressure.`,
+        "Reserve, runway, and proof history refreshed together.",
+      ]
+    : getProjectInsights(selectedProject);
+  const selectedActivity = activityByProject[selectedProject.id] ?? [];
+  const selectedSignal = getOperationalSignal(selectedProject);
+  const pulseItems = [
+    ...(latestPayment
+      ? [
+          {
+            project: latestPayment.projectName,
+            action: "payment synchronized",
+            impact: `${latestPayment.amountLabel} · proof generated`,
+            tone: "positive" as const,
+          },
+        ]
+      : []),
+    {
+      project: selectedProject.name,
+      action: selectedActivity[0]?.action ?? "refreshed operating state",
+      impact: selectedActivity[0]?.impact ?? selectedSignal.detail,
+      tone: selectedProject.statusTone === "warning" ? "negative" as const : selectedProject.statusTone === "success" ? "positive" as const : "neutral" as const,
+    },
+    ...crossProjectFeed.slice(0, latestPayment ? 0 : 1),
+  ];
 
   return (
-    <Link
-      href={`/projects/${project.id}`}
-      className="zila-card-hover relative block overflow-hidden rounded-[28px] border border-white/14 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.08),transparent_28%),linear-gradient(180deg,#142947,#0B1729_72%,#07111F)] p-5 shadow-[0_28px_64px_rgba(6,16,31,0.34),0_0_26px_rgba(103,232,249,0.055),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl"
-    >
-      <span className={`pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r ${projectAccentClass(project.statusTone)}`} />
-      <span className={`pointer-events-none absolute right-[-18%] top-[-24%] h-40 w-40 rounded-full blur-3xl ${
-        project.statusTone === "warning" ? "bg-[#B98B4A]/12" : project.statusTone === "success" ? "bg-[#67E8F9]/10" : "bg-[#8FA7C7]/10"
-      }`} />
+    <aside key={selectedProject.id} className="zila-flow-step relative overflow-hidden rounded-[30px] border border-white/9 bg-[radial-gradient(circle_at_100%_0%,rgba(217,255,87,0.08),transparent_28%),linear-gradient(180deg,rgba(4,9,22,0.68),rgba(9,22,42,0.52),rgba(7,17,31,0.70))] p-4 text-white shadow-[0_22px_54px_rgba(15,23,42,0.20),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl xl:sticky xl:top-5">
+      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(217,255,87,0.28),transparent)]" />
       <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <span
-              className="inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-[#67E8F9]/18 bg-[linear-gradient(135deg,#132A48,#0D1B31)] text-[#BFEFFF] shadow-[0_10px_22px_rgba(1,8,20,0.22),inset_0_1px_0_rgba(255,255,255,0.08)]"
-            >
-              <ZilaSignal variant={getSignalVariant(project.statusTone, project.id)} onDark className="h-5 w-5" />
-            </span>
-            <div>
-              <h3 className="text-[20px] font-semibold tracking-[-0.045em] text-white">{project.name}</h3>
-              <p className="mt-1 text-[12px] font-medium text-[#AFC0DD]">{project.stage}</p>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#D9FF57]">Coordination intelligence</p>
+          <h3 className="mt-3 text-[20px] font-semibold leading-[1.12] tracking-[-0.05em]">{selectedProject.name} is in focus.</h3>
+        </div>
+        <span className="zila-live-dot mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#D9FF57] shadow-[0_0_16px_rgba(217,255,87,0.34)]" />
+      </div>
+
+      <div className="mt-5 space-y-5">
+        <div className="space-y-4">
+          {selectedInsights.map((insight, index) => (
+            <div key={insight} className="flex gap-3">
+              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${index === 0 ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"}`} />
+              <p className="text-[13px] font-semibold leading-[1.55] text-[#D7E3F8]">{insight}</p>
             </div>
+          ))}
+        </div>
+
+        <Link
+          href="/payments"
+          className="group flex items-center justify-between gap-4 rounded-[22px] border border-[#D9FF57]/16 bg-[#D9FF57]/[0.07] px-4 py-3.5 transition hover:-translate-y-0.5 hover:bg-[#D9FF57]/[0.10] hover:shadow-[0_18px_36px_rgba(217,255,87,0.08)]"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] border border-[#D9FF57]/18 bg-[#D9FF57]/[0.09] text-[#EAFFB4]">
+              <CreditCard className="h-[16px] w-[16px]" strokeWidth={2} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold text-[#F1FFB8]">Coordinate payments</span>
+              <span className="mt-1 block text-[12px] leading-[1.45] text-[#B9C8DF]">
+                {paymentSynced ? "Payment moved. Proof and project state are synced." : "Turn pressure into supplier payouts, reserves, and payment timing."}
+              </span>
+            </span>
+          </span>
+          <ArrowRight className="h-[14px] w-[14px] shrink-0 text-[#EAFFB4] transition group-hover:translate-x-0.5" strokeWidth={2} />
+        </Link>
+
+        <div className="h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.16),transparent)]" />
+
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F0C777]">Needs attention</p>
+          <div className="mt-3 space-y-3">
+            {(selectedProject.statusTone === "warning" ? [selectedProject, ...attentionProjects.filter((project) => project.id !== selectedProject.id)] : attentionProjects).slice(0, 2).map((project) => (
+              <Link
+                key={project.id}
+                href={`/projects/${project.id}`}
+                className="group block rounded-[22px] border border-white/8 bg-white/[0.035] px-4 py-4 transition hover:-translate-y-0.5 hover:border-[#F0C777]/22 hover:bg-white/[0.055]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-semibold text-[#E9EEF9]">{project.name}</p>
+                    <p className="mt-2 text-[15px] font-semibold leading-[1.35] tracking-[-0.025em] text-white">{project.nextMoveSummary}</p>
+                  </div>
+                  <ArrowRight className="mt-1 h-[14px] w-[14px] shrink-0 text-[#F0C777] transition group-hover:translate-x-0.5 group-hover:text-white" />
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
-        <Pill tone={project.statusTone} className={projectPillClass(project.statusTone)}>
-          {project.status}
-        </Pill>
-      </div>
 
-      <div className={`relative mt-5 rounded-[18px] border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_12px_24px_rgba(1,8,20,0.12)] ${signal.toneClass}`}>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[13px] font-semibold">{signal.label}</p>
-          <span className="insight-signal-pulse h-2 w-2 rounded-full bg-current opacity-80" />
-        </div>
-        <p className="mt-1 text-[12px] font-semibold text-[#DCE7FA]">{signal.detail}</p>
-      </div>
+        <div className="h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.16),transparent)]" />
 
-      <div className="mt-5">
-        <div className="flex h-1.5 overflow-hidden rounded-full bg-[#1C3351]">
-          <div className={`rounded-full ${projectProgressClass(project.statusTone)}`} style={{ width: `${Math.min(project.progress, 100)}%` }} />
-        </div>
-        <div className="mt-3 flex items-center justify-between text-[12px] font-semibold text-[#C7D2EA]">
-          <span>{project.remaining} remaining</span>
-          <span>{project.progress}% active</span>
+        <div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7EE7F6]">System pulse</p>
+            <span className="rounded-full border border-[#67E8F9]/24 bg-[#67E8F9]/10 px-2.5 py-1 text-[10px] font-semibold text-[#D9FAFF]">Live</span>
+          </div>
+          <div className="space-y-0">
+            {pulseItems.map((item, index) => (
+              <div key={`${item.project}-${item.action}`} className="relative flex gap-3 pb-4 last:pb-0">
+                <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${
+                  item.tone === "positive"
+                    ? "bg-[#67E8F9] shadow-[0_0_12px_rgba(103,232,249,0.24)]"
+                    : item.tone === "negative"
+                      ? "bg-[#B98B4A] shadow-[0_0_12px_rgba(185,139,74,0.24)]"
+                      : "bg-[#9FB7D6] shadow-[0_0_12px_rgba(159,183,214,0.16)]"
+                }`} />
+                {index < crossProjectFeed.length - 1 ? <span className="absolute left-[3.5px] top-6 h-[calc(100%-1rem)] w-px bg-white/12" /> : null}
+                <div className="min-w-0">
+                  <p className="text-[12px] leading-[1.55] text-[#D7E3F8]">
+                    <span className="font-semibold text-white">{item.project}</span> {item.action.replace("updated", "recalculated").replace("recorded", "synchronized")}
+                  </p>
+                  <p className={`mt-1 text-[11px] font-semibold ${item.tone === "positive" ? "text-[#D9FAFF]" : item.tone === "negative" ? "text-[#F0C777]" : "text-[#AFC0DD]"}`}>
+                    {item.impact} · {item.tone === "positive" ? "runway protected" : item.tone === "negative" ? "pressure detected" : "safe-to-use recalculated"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-
-      <div className="mt-6 border-t border-white/10 pt-4">
-        <p className="text-[13px] font-semibold leading-[1.45] text-[#EAF1FF]">
-          {project.nextMoveSummary}
-        </p>
-      </div>
-    </Link>
+    </aside>
   );
 }
 
 export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
-  const remainingProjects = projects.slice(1);
+  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "");
+  const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0];
   const attentionProjects = projects.filter((project) => project.statusTone === "warning").slice(0, 2);
+  const healthyCount = projects.filter((project) => project.statusTone === "success").length;
+  const pressureCount = projects.filter((project) => project.statusTone === "warning").length;
+  const moveReadyCount = projects.filter((project) => project.cashNeeded !== "$0").length;
+  const paymentProjectId = useMemo(() => getPaymentProjectId(latestPayment, projects), [latestPayment, projects]);
+  const livePortfolioInsights = latestPayment
+    ? [
+        `${latestPayment.amountLabel} payout synced to ${latestPayment.projectName}.`,
+        "Reserve and runway recalculated.",
+        "Proof generated automatically.",
+      ]
+    : portfolioInsights;
+
+  useEffect(() => {
+    const update = () => setLatestPayment(getLatestPaymentTransaction());
+
+    update();
+    return subscribeToLatestPaymentTransaction(update);
+  }, []);
+
+  useEffect(() => {
+    if (paymentProjectId) {
+      setSelectedProjectId(paymentProjectId);
+    }
+  }, [paymentProjectId]);
+
+  if (!selectedProject) {
+    return null;
+  }
 
   return (
-    <div className="zila-unified-page -mx-4 -mt-2 space-y-5 px-4 pb-28 pt-5 md:-mx-6 md:rounded-[36px] md:px-6 md:pb-10 lg:-mx-8 lg:px-8 md:space-y-6">
-      <section className="zila-surface-grain zila-unified-panel relative overflow-hidden rounded-[32px] p-6 md:p-7">
+    <div className={`zila-unified-page relative -mx-4 -mt-2 space-y-4 overflow-hidden px-4 pb-[4.5rem] pt-3 before:pointer-events-none before:absolute before:inset-0 before:opacity-100 before:transition before:duration-700 md:-mx-5 md:rounded-[28px] md:px-5 md:pb-6 lg:-mx-6 lg:px-5 md:space-y-5 ${pageAtmosphereClass(selectedProject.statusTone)}`}>
+      <section className="zila-surface-grain zila-unified-panel relative overflow-hidden rounded-[24px] p-4 md:p-4.5">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(255,255,255,0.16),transparent_30%),radial-gradient(circle_at_72%_8%,rgba(103,232,249,0.18),transparent_34%),linear-gradient(100deg,rgba(33,79,131,0.20),rgba(23,61,109,0.14),rgba(255,255,255,0))]" />
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -437,27 +677,37 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
               </span>
               <div>
                 <p className="text-[12px] font-semibold uppercase tracking-[0.22em] text-[#BFF7FF]">Live operating portfolio</p>
-                <p className="mt-1 text-[12px] font-medium text-[#E0EAF8]">Refreshing pressure, runway, and next moves</p>
+              <p className="mt-1 text-[12px] font-medium text-[#E0EAF8]">
+                {latestPayment ? "Payment, reserve, and proof state synchronized" : "Refreshing pressure, runway, and next moves"}
+              </p>
               </div>
             </div>
-            <h1 className="mt-6 text-[40px] font-semibold leading-none tracking-[-0.07em] text-white md:text-[48px]">Projects in motion</h1>
-            <p className="mt-4 max-w-[720px] text-[15px] font-medium leading-[1.8] text-[#E0EAF8]">
-              See which projects are healthy, where pressure is building, and what Zila recommends next.
+            <h1 className="mt-3 text-[30px] font-semibold leading-none tracking-[-0.07em] text-white md:text-[34px]">Projects in motion</h1>
+            <p className="mt-2.5 max-w-[700px] text-[13px] font-medium leading-[1.6] text-[#E0EAF8]">
+              Live coordination across reserves, supplier timing, proof records, and project runway.
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {livePortfolioInsights.slice(0, 3).map((insight, index) => (
+                <span key={insight} className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold ${index === 0 ? "border-[#D9FF57]/18 bg-[#D9FF57]/[0.075] text-[#EAFFB4]" : "border-white/10 bg-white/[0.055] text-[#D7E3F8]"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${index === 0 ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"}`} />
+                  {insight}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="rounded-[24px] border border-white/14 bg-[#071526]/34 px-4 py-3 shadow-[0_18px_36px_rgba(1,8,20,0.18),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl">
+          <div className="rounded-[22px] border border-white/14 bg-[#071526]/34 px-3.5 py-3 shadow-[0_18px_36px_rgba(1,8,20,0.18),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl">
             <div className="flex items-center justify-between gap-5">
               <LivePulse label="Portfolio live" />
-              <p className="text-[12px] font-semibold text-[#E0EAF8]">7 updates today</p>
+              <p className="text-[12px] font-semibold text-[#E0EAF8]">{latestPayment ? "Synced just now" : "7 updates today"}</p>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-3 text-center">
               {[
-                ["2", "healthy"],
-                ["2", "pressure"],
-                ["1", "move ready"],
+                [String(healthyCount), "healthy"],
+                [String(pressureCount), "pressure"],
+                [String(moveReadyCount), "move ready"],
               ].map(([value, label]) => (
                 <div key={label}>
-                  <p className="text-[22px] font-semibold leading-none tracking-[-0.05em] text-white">{value}</p>
+                  <p key={`${label}-${value}`} className="zila-number-shift text-[22px] font-semibold leading-none tracking-[-0.05em] text-white">{value}</p>
                   <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#DCE7FA]">{label}</p>
                 </div>
               ))}
@@ -466,94 +716,26 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
-        <div className="space-y-5">
-          <FeaturedProjectCarousel projects={projects} />
-
-          <section className="grid gap-4 lg:grid-cols-[1fr_1.05fr_0.95fr]">
-            {remainingProjects.map((project) => (
-              <ProjectSmartCard key={project.id} project={project} />
-            ))}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_286px] xl:items-start">
+        <div>
+          <section className="relative">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-4 px-1">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7EE7F6]">Primary operating focus</p>
+                <p className="mt-1 text-[15px] font-semibold text-[#E0EAF8]">Selected from the live project rail below.</p>
+              </div>
+              <LivePulse label="Recalculating" />
+            </div>
+            <div key={selectedProject.id} className="zila-flow-step">
+              <FeaturedProjectCard project={selectedProject} isActive latestPayment={latestPayment} />
+            </div>
           </section>
         </div>
 
-        <aside className="space-y-5">
-          <section className="zila-card-hover rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#040916,#0E172D_58%,#17213F)] p-5 text-white shadow-[0_24px_60px_rgba(15,23,42,0.28),inset_0_1px_0_rgba(255,255,255,0.09)] backdrop-blur-xl">
-            <div className="mb-5 flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] border border-amber-200/16 bg-amber-300/12 text-[#FDE68A] shadow-[0_0_24px_rgba(251,191,36,0.16),inset_0_1px_0_rgba(255,255,255,0.12)]">
-                <AlertTriangle className="h-[19px] w-[19px]" strokeWidth={1.9} />
-                </span>
-                <div>
-                  <p className="text-[16px] font-semibold tracking-[-0.025em]">Needs attention</p>
-                  <p className="mt-1 text-[12px] font-medium text-[#E0EAF8]">Actionable pressure</p>
-                </div>
-              </div>
-              <span className="insight-signal-pulse mt-1 h-2.5 w-2.5 rounded-full bg-[#FDE68A] shadow-[0_0_16px_rgba(253,230,138,0.38)]" />
-            </div>
-            <div className="space-y-3">
-              {attentionProjects.map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.id}`}
-                  className="group block rounded-[22px] border border-white/10 bg-[#071526]/42 px-4 py-4 transition hover:-translate-y-0.5 hover:border-white/16 hover:bg-[#0B1A2F]/70"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[13px] font-semibold text-[#E9EEF9]">{project.name}</p>
-                      <p className="mt-2 text-[15px] font-semibold leading-[1.35] tracking-[-0.025em] text-white">{project.nextMoveSummary}</p>
-                      <p className="mt-2 text-[12px] font-medium leading-[1.55] text-[#E0EAF8]">{project.ifNoAction}</p>
-                    </div>
-                    <ArrowRight className="mt-1 h-[14px] w-[14px] shrink-0 text-[#FDE68A] transition group-hover:translate-x-0.5 group-hover:text-white" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          <section className="zila-card-hover rounded-[30px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(237,246,255,0.90))] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.07),0_24px_58px_rgba(31,68,116,0.10),inset_0_1px_0_rgba(255,255,255,0.92)] backdrop-blur-xl">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-[#C8DEF4] bg-[linear-gradient(135deg,#FFFFFF,#EAF9FF)] text-[#1D4ED8] shadow-[0_12px_24px_rgba(31,68,116,0.12),inset_0_1px_0_rgba(255,255,255,0.92)]">
-                <Activity className="h-[18px] w-[18px]" strokeWidth={1.9} />
-              </span>
-              <div>
-                <p className="text-[16px] font-semibold tracking-[-0.03em] text-[#121417]">System pulse</p>
-                <p className="mt-0.5 text-[12px] text-[#475569]">Coordinated movement</p>
-              </div>
-              </div>
-              <span className="rounded-full border border-[#67E8F9]/45 bg-[#DDFBFF] px-2.5 py-1 text-[10px] font-semibold text-[#0E5B73] shadow-[inset_0_1px_0_rgba(255,255,255,0.70)]">Live</span>
-            </div>
-            <div className="space-y-0">
-              {crossProjectFeed.map((item, index) => (
-                <div key={`${item.person}-${item.project}-${item.action}`} className="relative flex gap-3 pb-5 last:pb-0">
-                  <span className={`mt-2 h-2.5 w-2.5 shrink-0 rounded-full ${
-                    item.tone === "positive"
-                      ? "bg-[#67E8F9] shadow-[0_0_12px_rgba(103,232,249,0.24)]"
-                      : item.tone === "negative"
-                        ? "bg-[#B98B4A] shadow-[0_0_12px_rgba(185,139,74,0.24)]"
-                        : "bg-[#9FB7D6] shadow-[0_0_12px_rgba(159,183,214,0.16)]"
-                  }`} />
-                  {index < crossProjectFeed.length - 1 ? <span className="absolute left-[4.5px] top-6 h-[calc(100%-1.25rem)] w-px bg-[#B6CBE2]" /> : null}
-                  <div className="min-w-0">
-                    <p className="text-[13px] leading-[1.55] text-[#1F2A44]">
-                      <span className="font-semibold text-[#121417]">{item.project}</span> {item.action.replace("updated", "recalculated").replace("recorded", "synchronized")}
-                    </p>
-                    <p
-                      className={`mt-1 text-[12px] font-semibold ${
-                        item.tone === "positive" ? "text-[#0E5B73]" : item.tone === "negative" ? "text-[#8A5A22]" : "text-[#475569]"
-                      }`}
-                    >
-                      {item.impact} · {item.tone === "positive" ? "runway protected" : item.tone === "negative" ? "pressure detected" : "safe-to-use recalculated"}
-                    </p>
-                    </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-        </aside>
+        <PortfolioIntelligencePanel selectedProject={selectedProject} attentionProjects={attentionProjects} latestPayment={latestPayment} />
       </div>
+
+      <OperationalRail projects={projects} selectedProjectId={selectedProject.id} onSelectProject={setSelectedProjectId} latestPayment={latestPayment} />
     </div>
   );
 }

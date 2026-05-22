@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { BottomNavigation } from "@/components/ui/BottomNavigation";
+import { ContextualBackNav } from "@/components/ui/ContextualBackNav";
 import { DesktopShell } from "@/components/ui/DesktopShell";
 import { TopBar } from "@/components/home/TopBar";
 import { ProductGuideModal } from "@/components/guide/ProductGuideModal";
@@ -15,7 +16,10 @@ export function AppShell({ children }: AppShellProps) {
       <div className="md:hidden">
         <div className="zila-atmosphere mx-auto min-h-screen max-w-[390px] bg-[#06101F]">
           <TopBar />
-          <main className="px-4 pb-28 pt-2">{children}</main>
+          <main className="px-4 pb-28 pt-2">
+            <ContextualBackNav className="mb-3" />
+            {children}
+          </main>
         </div>
         <BottomNavigation />
       </div>

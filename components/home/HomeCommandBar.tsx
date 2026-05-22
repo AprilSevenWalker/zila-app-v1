@@ -207,15 +207,14 @@ export function HomeCommandBar() {
                   Response
                 </p>
                 <p className="mt-3 text-[17px] font-medium leading-[1.7] text-[#243244]">
-                  Got it. That increases your costs this week. Project Horizon is now closer to a shortfall by Friday.
-                  We can fix it - want me to move funds?
+                  Got it. Project Horizon has one supplier obligation due Friday. Zila can coordinate the payout while keeping the reserve protected.
                 </p>
               </div>
               <Link
-                href="/payments/make-payment"
+                href="/payments/choose-method"
                 className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[linear-gradient(135deg,#111827,#312E81)] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_14px_30px_rgba(49,46,129,0.20)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(49,46,129,0.26)]"
               >
-                Fix this now
+                Coordinate payout
                 <ArrowRight className="h-[13px] w-[13px]" strokeWidth={2} />
               </Link>
             </div>

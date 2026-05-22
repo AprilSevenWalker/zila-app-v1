@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, Copy, Landmark, QrCode, Send, ShieldCheck } from "lucide-react";
 
 import { AppShell } from "@/components/ui/AppShell";
+import { FlowBackNav } from "@/components/ui/FlowBackNav";
 import { getMoneySourceState, subscribeToMoneySource } from "@/lib/moneySourceStore";
 import {
   getMoneyMovementState,
@@ -125,7 +126,14 @@ export function ReceiveMoneyScreen() {
     <AppShell>
       <div className="-mx-4 -mt-2 min-h-[calc(100vh-7.5rem)] overflow-hidden bg-[radial-gradient(ellipse_at_20%_0%,rgba(255,255,255,0.62),transparent_32%),radial-gradient(ellipse_at_86%_8%,rgba(103,232,249,0.24),transparent_30%),linear-gradient(180deg,#DCEEFF_0%,#C6DDF8_48%,#AFCBEF_100%)] px-6 pb-28 pt-8 text-white md:-mx-6 md:rounded-[36px] md:px-8 md:pb-12 lg:-mx-8 lg:px-10">
         <div className="relative mx-auto max-w-[1180px]">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <FlowBackNav
+            surface="light"
+            items={[
+              { label: "Payments", href: "/payments", primary: true },
+              { label: "Dashboard", href: "/home" },
+            ]}
+          />
+          <div className="mb-6 mt-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-[12px] font-semibold uppercase tracking-[0.22em] text-[#1D4E7F]">Receive money</p>
               <h1 className="mt-3 text-[42px] font-semibold leading-[1.02] tracking-[-0.055em] text-[#17345F]">Receive operational funds.</h1>

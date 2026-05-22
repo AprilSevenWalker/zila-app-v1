@@ -38,10 +38,10 @@ export function ActiveFocusCard() {
           <ArrowRight className="h-[12px] w-[12px]" strokeWidth={2} />
         </Link>
         <Link
-          href="/payments/make-payment"
+          href="/payments/choose-method"
           className="inline-flex items-center justify-center rounded-full border border-white/14 bg-white/[0.10] px-4 py-2.5 text-[12px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.14]"
         >
-          Move funds
+          Coordinate payout
         </Link>
         <Link
           href="/move-funds"

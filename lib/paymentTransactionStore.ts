@@ -9,6 +9,9 @@ export interface LatestPaymentTransaction {
   movementType?: PaymentMovementType;
   verificationState?: "Prepared" | "Verified";
   transferStatus?: "Processing" | "Completed";
+  reserveAfter?: string;
+  runwayAfter?: string;
+  obligationStatus?: "Open" | "Coordinated" | "Settled";
   walletAddress: string;
   network: "XRPL Mainnet";
   createdAtIso: string;
@@ -63,6 +66,9 @@ function safeParse(value: string | null): LatestPaymentTransaction | null {
       movementType: parsed.movementType || "outgoing",
       verificationState: parsed.verificationState || "Verified",
       transferStatus: parsed.transferStatus || "Completed",
+      reserveAfter: parsed.reserveAfter || undefined,
+      runwayAfter: parsed.runwayAfter || undefined,
+      obligationStatus: parsed.obligationStatus || undefined,
       walletAddress: parsed.walletAddress || "",
       network: "XRPL Mainnet",
       createdAtIso: parsed.createdAtIso,

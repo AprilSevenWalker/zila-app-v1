@@ -291,6 +291,43 @@ export function useReserveForPayment(input: {
   return activity;
 }
 
+export function recordPaymentReserveRecalculation(input: {
+  amount: number;
+  amountLabel: string;
+  projectName: string;
+  recipientName: string;
+  txHash: string;
+  reserveAfterLabel?: string;
+  runwayAfterLabel?: string;
+}) {
+  const current = getProtectedMoneyState();
+  const createdAtIso = new Date().toISOString();
+  const nextSummary = calculateSummaryWithReserves(current.reserves);
+  const activity: ReserveActivity = {
+    id: `payment-reserve-${input.txHash}`,
+    action: "Reserve and runway recalculated",
+    context: `${input.amountLabel} supplier payout completed for ${input.recipientName}`,
+    amount: input.amount,
+    reserveName: "Protected supplier reserve",
+    linkedProject: input.projectName,
+    summary: `Protected reserve remains ${input.reserveAfterLabel ?? formatCurrency(nextSummary.protectedAmount)} after the payout. Runway updated to ${input.runwayAfterLabel ?? "current operating range"}.`,
+    insight: `${input.projectName} stayed coordinated after the supplier obligation cleared.`,
+    protectedAmountAfter: nextSummary.protectedAmount,
+    safeToSpendAfter: nextSummary.safeToSpend,
+    transactionState: "Recorded",
+    txHash: input.txHash,
+    explorerUrl: buildXrplExplorerUrl(input.txHash),
+    createdAtIso,
+  };
+
+  saveState({
+    reserves: current.reserves,
+    activity: [activity, ...current.activity.filter((item) => item.id !== activity.id)].slice(0, 16),
+  });
+
+  return activity;
+}
+
 export function protectedMoneyActivityToTimelineItem(activity: ReserveActivity): ProofTimelineItem {
   const txHash = activity.txHash ?? "OPERATIONSRESERVE";
   const protectedAmountAfter = activity.protectedAmountAfter ?? getProtectedMoneySummary().protectedAmount;

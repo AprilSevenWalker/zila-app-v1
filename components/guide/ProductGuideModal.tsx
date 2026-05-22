@@ -9,32 +9,37 @@ const GUIDE_OPEN_EVENT = "zila-open-product-guide";
 const guideSteps = [
   {
     title: "Welcome to Zila",
-    text: "Zila helps project-based businesses understand what is safe to spend, protect important money, and move funds with confidence.",
+    text: "Zila helps project-based businesses understand what is safe to spend, protect important money, and coordinate payments with confidence.",
     icon: Sparkles,
   },
   {
     title: "Projects",
-    text: "Track money across real operational work so payments and decisions stay connected to delivery.",
+    text: "Track money across real operational work so payments, suppliers, and decisions stay connected.",
     icon: FolderKanban,
   },
   {
-    title: "Protected Money",
-    text: "Set aside money for suppliers, payroll, tax, and upcoming commitments before it becomes available to spend.",
+    title: "Protected Reserves",
+    text: "Set aside money for suppliers, payroll, tax, and important commitments before it becomes available to spend.",
     icon: LockKeyhole,
   },
   {
     title: "Safe to Spend",
-    text: "See what is actually available before making decisions, after protected money and commitments are accounted for.",
+    text: "See what is actually available after protected money, upcoming payments, and commitments are accounted for.",
     icon: WalletCards,
   },
   {
+    title: "Payments Across Rails",
+    text: "Coordinate payments across banks, mobile money, and stablecoin rails from one operational system.",
+    icon: Landmark,
+  },
+  {
     title: "Proof of Operations",
-    text: "Every important movement creates a verified operational record your business can rely on later.",
+    text: "Important payment and operational activity automatically creates verified business records.",
     icon: FileCheck2,
   },
   {
-    title: "Operational insight",
-    text: "Zila turns project updates, reserves, and payment movement into calm guidance about what happens next.",
+    title: "What Happens Next",
+    text: "Zila turns payment movement, reserves, and operational activity into calm guidance about what needs attention next.",
     icon: ShieldCheck,
   },
 ];
@@ -109,6 +114,10 @@ export function ProductGuideModal() {
               <Icon className="h-5 w-5" strokeWidth={1.9} />
             </span>
             <p className="mt-5 text-[15px] leading-[1.75] text-[#DCE8FF]">{step.text}</p>
+            <div className="mt-5 flex items-center gap-2 rounded-full border border-[#D9FF57]/12 bg-[#D9FF57]/[0.055] px-3 py-2">
+              <span className="zila-live-dot h-2 w-2 rounded-full bg-[#D9FF57]" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#E7F5C3]">Money stays connected</span>
+            </div>
           </div>
 
           <div className="mt-5 flex items-center justify-between gap-3">
