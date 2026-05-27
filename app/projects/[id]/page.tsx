@@ -15,5 +15,5 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const project = getProjectById(id) ?? getDefaultProject();
 
-  return <ProjectOperationalDetail project={project} />;
+  return <ProjectOperationalDetail project={project} requestedProjectId={id} />;
 }

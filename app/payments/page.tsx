@@ -537,7 +537,9 @@ export default function PaymentsPage() {
                           <span className={`inline-flex h-8 w-8 items-center justify-center rounded-[12px] border border-white/10 bg-white/[0.06] transition group-hover:scale-[1.03] ${rail.tone}`}>
                             <RailIcon className="h-[14px] w-[14px]" strokeWidth={2} />
                           </span>
-                          <span className="rounded-full border border-white/10 bg-[#102A4F]/56 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#C9D4F5]">{rail.status}</span>
+                          <span className="inline-flex h-10 min-w-[82px] shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-white/10 bg-[#102A4F]/56 px-3 text-center text-[9px] font-semibold uppercase leading-none tracking-[0.1em] text-[#C9D4F5] sm:min-w-[90px] sm:text-[10px] sm:tracking-[0.12em]">
+                            {rail.status}
+                          </span>
                         </div>
                         <p className="mt-3 text-[13px] font-semibold text-white">{rail.label}</p>
                         <p className="mt-1 text-[12px] text-[#AFC0DD]">{rail.detail}</p>

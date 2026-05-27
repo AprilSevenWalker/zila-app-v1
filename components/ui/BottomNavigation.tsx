@@ -25,9 +25,9 @@ export function BottomNavigation() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-20 md:hidden">
-      <div className="mx-auto max-w-[390px] px-4 pb-4">
-        <div className="flex items-end justify-around rounded-[24px] border border-[#7CF3FF]/14 bg-[#102347]/94 px-2 pt-2 shadow-[0_20px_50px_rgba(1,8,20,0.40),0_0_24px_rgba(89,225,255,0.08)] backdrop-blur-md">
+    <nav className="fixed bottom-0 left-0 right-0 z-20 lg:hidden">
+      <div className="zila-safe-bottom mx-auto w-full max-w-[760px] px-3 pb-4 sm:px-5">
+        <div className="flex items-end justify-around overflow-x-auto rounded-[24px] border border-[#7CF3FF]/14 bg-[#102347]/94 px-1.5 pt-2 shadow-[0_20px_50px_rgba(1,8,20,0.40),0_0_24px_rgba(89,225,255,0.08)] backdrop-blur-md [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navItems.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -37,7 +37,7 @@ export function BottomNavigation() {
               <Link
                 key={item.name}
                 href={item.href}
-                className="relative flex flex-1 flex-col items-center px-2 py-3 transition-opacity hover:opacity-75"
+                className="relative flex min-w-[58px] flex-1 flex-col items-center px-1.5 py-3 transition-opacity hover:opacity-75"
               >
                 <IconTile
                   className={`mb-1 ${isActive ? "text-[#F7F8FC] bg-[#2F80FF]" : "text-[#C9D4F5] bg-white/[0.06]"}`}

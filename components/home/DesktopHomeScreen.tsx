@@ -18,11 +18,15 @@ import {
 import { ActiveFocusCard } from "@/components/home/ActiveFocusCard";
 import { DesktopConnectMoneyPrompt } from "@/components/home/DesktopConnectMoneyPrompt";
 import { ProjectCarousel } from "@/components/home/ProjectCarousel";
+import { projects as seedProjects } from "@/data/projects";
 import {
+  getPaymentMovementHistory,
   getLatestPaymentTransaction,
   subscribeToLatestPaymentTransaction,
   type LatestPaymentTransaction,
+  type PaymentMovementRecord,
 } from "@/lib/paymentTransactionStore";
+import { getStoredOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
 import { getProtectedMoneySummary, subscribeToProtectedMoney } from "@/lib/protectedMoneyStore";
 
 const suggestionChips = ["Supplier payout ready", "Reserve protected"];
@@ -78,6 +82,37 @@ const defaultRecentActivity = [
 
 function formatCurrency(amount: number) {
   return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+function formatActivityTime(value: string) {
+  const createdAt = new Date(value);
+  if (Number.isNaN(createdAt.getTime())) {
+    return "Recently";
+  }
+
+  const minutes = Math.max(Math.round((Date.now() - createdAt.getTime()) / 60000), 0);
+  if (minutes < 2) {
+    return "Just now";
+  }
+  if (minutes < 60) {
+    return `${minutes} mins ago`;
+  }
+
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} hrs ago` : createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function movementActivity(record: PaymentMovementRecord) {
+  const isVerified = record.status === "Verified" || record.txHash;
+
+  return {
+    label: isVerified ? `${record.recipientName ?? "Supplier"} payout verified` : record.title,
+    amount: record.amountLabel,
+    tone: isVerified ? "text-[#D9FF57]" : "text-[#67E8F9]",
+    time: formatActivityTime(record.createdAtIso),
+    icon: isVerified ? ShieldCheck : CreditCard,
+    iconTone: isVerified ? "from-[#173D6D] to-[#102A4F] text-[#D9FF57]" : "from-[#173D6D] to-[#102A4F] text-[#67E8F9]",
+  };
 }
 
 function CashFlowGraph() {
@@ -164,70 +199,106 @@ function HeroVisual() {
   );
 }
 
-const heroOperationalCards = [
-  {
-    label: "USD to KES route active",
-    detail: "Supplier payout ready",
-    className: "zila-auth-card-drift-b right-[8%] top-[22%] w-[188px]",
-  },
-];
-
 export function DesktopHomeScreen() {
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<PaymentMovementRecord[]>([]);
   const [moneySummary, setMoneySummary] = useState(getProtectedMoneySummary);
+  const [storedProjects, setStoredProjects] = useState(() => getStoredOperationalProjects());
   const displayActivity = useMemo(() => {
-    if (!latestPayment) {
-      return defaultRecentActivity;
+    if (latestPayment) {
+      return [
+        {
+          label: `${latestPayment.recipientName ?? "Supplier"} payout completed`,
+          amount: latestPayment.amountLabel,
+          tone: "text-[#D9FF57]",
+          time: "Just now",
+          icon: CreditCard,
+          iconTone: "from-[#173D6D] to-[#102A4F] text-[#D9FF57]",
+        },
+        {
+          label: "Reserve and runway recalculated",
+          amount: latestPayment.reserveAfter ?? formatCurrency(moneySummary.protectedAmount),
+          tone: "text-[#67E8F9]",
+          time: "Just now",
+          icon: ShieldCheck,
+          iconTone: "from-[#173D6D] to-[#102A4F] text-[#67E8F9]",
+        },
+        {
+          label: "Operational proof generated",
+          amount: "XRPL synced",
+          tone: "text-[#AEBBDA]",
+          time: "Just now",
+          icon: FileText,
+          iconTone: "from-[#173D6D] to-[#102A4F] text-[#BFA7FF]",
+        },
+      ];
     }
 
-    return [
-      {
-        label: `${latestPayment.recipientName ?? "Supplier"} payout completed`,
-        amount: latestPayment.amountLabel,
-        tone: "text-[#D9FF57]",
-        time: "Just now",
-        icon: CreditCard,
-        iconTone: "from-[#173D6D] to-[#102A4F] text-[#D9FF57]",
-      },
-      {
-        label: "Reserve and runway recalculated",
-        amount: latestPayment.reserveAfter ?? formatCurrency(moneySummary.protectedAmount),
-        tone: "text-[#67E8F9]",
-        time: "Just now",
-        icon: ShieldCheck,
-        iconTone: "from-[#173D6D] to-[#102A4F] text-[#67E8F9]",
-      },
-      {
-        label: "Operational proof generated",
-        amount: "XRPL synced",
-        tone: "text-[#AEBBDA]",
-        time: "Just now",
-        icon: FileText,
-        iconTone: "from-[#173D6D] to-[#102A4F] text-[#BFA7FF]",
-      },
-    ];
-  }, [latestPayment, moneySummary.protectedAmount]);
+    if (paymentHistory.length > 0) {
+      return paymentHistory.slice(0, 3).map(movementActivity);
+    }
+
+    const seedNames = new Set(seedProjects.map((project) => project.name.toLowerCase()));
+    const newestProject = storedProjects.find((project) => !seedNames.has(project.name.toLowerCase()));
+    if (newestProject) {
+      return [
+        {
+          label: `${newestProject.name} project created`,
+          amount: "Workspace live",
+          tone: "text-[#D9FF57]",
+          time: "Just now",
+          icon: FolderKanban,
+          iconTone: "from-[#173D6D] to-[#102A4F] text-[#D9FF57]",
+        },
+        {
+          label: "Payment flow connected",
+          amount: "Ready",
+          tone: "text-[#67E8F9]",
+          time: "Just now",
+          icon: CreditCard,
+          iconTone: "from-[#173D6D] to-[#102A4F] text-[#67E8F9]",
+        },
+        {
+          label: "Operational memory prepared",
+          amount: "Proof ready",
+          tone: "text-[#AEBBDA]",
+          time: "Just now",
+          icon: FileText,
+          iconTone: "from-[#173D6D] to-[#102A4F] text-[#BFA7FF]",
+        },
+      ];
+    }
+
+    return defaultRecentActivity;
+  }, [latestPayment, moneySummary.protectedAmount, paymentHistory, storedProjects]);
 
   useEffect(() => {
-    const updatePayment = () => setLatestPayment(getLatestPaymentTransaction());
+    const updatePayment = () => {
+      setLatestPayment(getLatestPaymentTransaction());
+      setPaymentHistory(getPaymentMovementHistory());
+    };
     const updateMoney = () => setMoneySummary(getProtectedMoneySummary());
+    const updateProjects = () => setStoredProjects(getStoredOperationalProjects());
 
     updatePayment();
     updateMoney();
+    updateProjects();
     const unsubscribePayment = subscribeToLatestPaymentTransaction(() => {
       updatePayment();
       updateMoney();
     });
     const unsubscribeProtected = subscribeToProtectedMoney(updateMoney);
+    const unsubscribeProjects = subscribeToOperationalProjects(updateProjects);
 
     return () => {
       unsubscribePayment();
       unsubscribeProtected();
+      unsubscribeProjects();
     };
   }, []);
 
   return (
-    <div className="hidden md:block">
+    <div className="hidden lg:block">
       <div className="grid gap-3.5 xl:grid-cols-[minmax(0,1fr)_270px]">
         <div className="space-y-3">
           <section className="zila-card-hover zila-surface-grain relative min-h-[430px] overflow-hidden rounded-[26px] border border-white/18 bg-[linear-gradient(150deg,#254E7F_0%,#1E416E_44%,#17345F_100%)] p-5 shadow-[0_28px_66px_rgba(31,68,116,0.20),0_0_34px_rgba(103,232,249,0.06),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-xl">
@@ -253,7 +324,7 @@ export function DesktopHomeScreen() {
               </h1>
 
               <p className="mt-6 max-w-[520px] text-[16px] font-medium leading-[1.72] text-[#F6F5F1]/76">
-                Zila helps businesses coordinate payouts, approvals, reserves, and operational movement across banks, mobile money, and stablecoins in real time.
+                Money moves constantly across projects, suppliers, approvals, and borders. Zila keeps operations coordinated in real time.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-2">
@@ -268,24 +339,9 @@ export function DesktopHomeScreen() {
                 ))}
               </div>
 
-              <p className="mt-5 text-[11px] font-medium text-[#A7B0C5]">Projects, payments, approvals, and proof stay synchronized.</p>
+              <p className="mt-5 text-[11px] font-medium text-[#A7B0C5]">Across banks, mobile money, and stablecoin rails.</p>
             </div>
 
-            <div className="pointer-events-none absolute inset-0 z-[9] hidden md:block">
-              <div className="absolute right-[26%] top-[34%] h-px w-[150px] rotate-[12deg] bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.18),transparent)]" />
-              {heroOperationalCards.map((card) => (
-                <div
-                  key={card.label}
-                  className={`zila-auth-floating-card absolute rounded-[18px] border border-white/14 bg-[linear-gradient(145deg,rgba(23,52,95,0.58),rgba(16,42,79,0.50))] px-3 py-2.5 text-[#F6F5F1] shadow-[0_18px_38px_rgba(31,68,116,0.20),0_0_18px_rgba(103,232,249,0.045),inset_0_1px_0_rgba(246,245,241,0.10)] backdrop-blur-xl ${card.className}`}
-                >
-                  <p className="flex items-center gap-2 text-[11px] font-semibold">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#D9FF57] shadow-[0_0_10px_rgba(217,255,87,0.26)]" />
-                    {card.label}
-                  </p>
-                  <p className="mt-2 text-[10.5px] font-medium text-[#F6F5F1]/62">{card.detail}</p>
-                </div>
-              ))}
-            </div>
           </section>
 
           <ProjectCarousel />
@@ -369,10 +425,10 @@ export function DesktopHomeScreen() {
                   </div>
                 </div>
                 <Link
-                  href={latestPayment ? "/proof" : "/payments/choose-method"}
+                  href={latestPayment ? "/proof" : "/payments/send"}
                   className="zila-button-hover inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[15px] bg-[#1D4ED8] px-5 text-[13px] font-semibold text-white shadow-[0_18px_34px_rgba(29,78,216,0.20)]"
                 >
-                  {latestPayment ? "View proof" : "Coordinate payout"}
+                  {latestPayment ? "View proof" : "Make Payment"}
                   <ArrowRight className="h-[13px] w-[13px]" strokeWidth={2} />
                 </Link>
               </div>
@@ -504,10 +560,10 @@ export function DesktopHomeScreen() {
                   : "Project Horizon is the only active pressure point. Coordinate the Northline payout without drawing down the protected reserve."}
               </p>
               <Link
-                href={latestPayment ? "/proof" : "/payments/choose-method"}
+                href={latestPayment ? "/proof" : "/payments/send"}
                 className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#D9FF57] px-4 py-2.5 text-[12px] font-semibold text-[#111827] shadow-[0_14px_28px_rgba(217,255,87,0.14)]"
               >
-                {latestPayment ? "View proof" : "Coordinate payout"}
+                {latestPayment ? "View proof" : "Make Payment"}
                 <ArrowRight className="h-3 w-3" strokeWidth={2} />
               </Link>
             </div>

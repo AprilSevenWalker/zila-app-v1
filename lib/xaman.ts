@@ -3,14 +3,6 @@ import { xrpToDrops } from "xrpl";
 
 import { readServerEnv } from "@/lib/serverEnv";
 
-type PaymentAmount =
-  | string
-  | {
-      currency: string;
-      issuer: string;
-      value: string;
-    };
-
 export interface CreatePaymentPayloadInput {
   supplierName: string;
   amount: string | number;
@@ -24,6 +16,20 @@ export interface CreatePaymentPayloadInput {
   returnUrl?: {
     app: string;
     web: string;
+  };
+}
+
+interface XamanPayloadResponse {
+  uuid: string;
+  refs: {
+    qr_png: string;
+    websocket_status: string;
+  };
+  next: {
+    always: string;
+  };
+  response?: {
+    txid?: string;
   };
 }
 
@@ -41,11 +47,11 @@ function requireEnv(name: string, fallback?: string) {
 }
 
 function normalizeNetwork() {
-  const network = process.env.XRPL_NETWORK?.trim().toUpperCase();
+  const network = readEnv("XRPL_NETWORK")?.trim().toUpperCase();
   return network === "TESTNET" ? "TESTNET" : "MAINNET";
 }
 
-function normalizePaymentAmount(input: CreatePaymentPayloadInput): PaymentAmount {
+function normalizeXrpAmount(input: CreatePaymentPayloadInput) {
   const currency = input.currency?.trim().toUpperCase() || "XRP";
   const numericAmount = typeof input.amount === "number" ? input.amount : Number(input.amount);
 
@@ -53,27 +59,80 @@ function normalizePaymentAmount(input: CreatePaymentPayloadInput): PaymentAmount
     throw new Error("Payment amount must be a positive number.");
   }
 
-  if (currency === "XRP") {
-    return xrpToDrops(String(numericAmount));
+  if (currency !== "XRP") {
+    throw new Error("Use XRP for the first Xaman payout test. Stablecoin support comes later.");
   }
 
-  if (!input.issuer) {
-    throw new Error("Issued stablecoin payments require an issuer address.");
-  }
-
-  return {
-    currency,
-    issuer: input.issuer,
-    value: String(input.amount),
-  };
+  return xrpToDrops(String(numericAmount));
 }
 
-function encodeMemo(memo: string) {
-  return Buffer.from(memo, "utf8").toString("hex").toUpperCase();
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown Xaman payment request error.";
+}
+
+function summarizeAddress(address?: string) {
+  const trimmed = address?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return `${trimmed.slice(0, 6)}...${trimmed.slice(-6)}`;
+}
+
+function getPayloadLogContext(input: CreatePaymentPayloadInput, txjson: Record<string, unknown>) {
+  return {
+    network: normalizeNetwork(),
+    transactionType: txjson.TransactionType,
+    destinationAddress: summarizeAddress(input.destinationAddress),
+    senderAddress: summarizeAddress(input.senderAddress),
+    amount: txjson.Amount,
+    currency: input.currency?.trim().toUpperCase() || "XRP",
+  };
 }
 
 export function getXamanSdk() {
   return new XummSdk(requireEnv("XUMM_API_KEY", "XAMAN_API_KEY"), requireEnv("XUMM_API_SECRET", "XAMAN_API_SECRET"));
+}
+
+async function readXamanResponse(response: Response) {
+  const text = await response.text();
+
+  try {
+    return {
+      raw: text,
+      body: JSON.parse(text) as Record<string, unknown>,
+    };
+  } catch {
+    return {
+      raw: text,
+      body: null,
+    };
+  }
+}
+
+function getXamanApiMessage(body: Record<string, unknown> | null, fallback: string) {
+  if (!body) {
+    return fallback;
+  }
+
+  if (typeof body.message === "string") {
+    return body.message;
+  }
+
+  if (typeof body.error === "string") {
+    return body.error;
+  }
+
+  if (body.error && typeof body.error === "object") {
+    const error = body.error as Record<string, unknown>;
+    const code = typeof error.code === "number" || typeof error.code === "string" ? `Error code ${error.code}` : "Xaman API error";
+    const reference = typeof error.reference === "string" ? `, reference: ${error.reference}` : "";
+    const message = typeof error.message === "string" ? `: ${error.message}` : "";
+
+    return `${code}${reference}${message}`;
+  }
+
+  return fallback;
 }
 
 export async function createPaymentPayload(input: CreatePaymentPayloadInput) {
@@ -81,52 +140,47 @@ export async function createPaymentPayload(input: CreatePaymentPayloadInput) {
     throw new Error("Supplier destination address is required.");
   }
 
-  const sdk = getXamanSdk();
-  const memo = input.memo?.trim() || `${input.supplierName} payout for ${input.projectName || input.projectId}`;
   const txjson: Record<string, unknown> = {
     TransactionType: "Payment",
     Destination: input.destinationAddress.trim(),
-    Amount: normalizePaymentAmount(input),
-    Memos: [
-      {
-        Memo: {
-          MemoType: encodeMemo("Zila operational payout"),
-          MemoData: encodeMemo(memo),
-        },
-      },
-    ],
+    Amount: normalizeXrpAmount(input),
   };
-
-  if (input.senderAddress?.trim()) {
-    txjson.Account = input.senderAddress.trim();
-  }
 
   const payloadBody = {
     txjson,
-    options: {
-      force_network: normalizeNetwork(),
-      return_url: input.returnUrl,
-    },
-    custom_meta: {
-      identifier: `zila-payment-${input.projectId}-${Date.now()}`,
-      instruction: `Approve ${input.supplierName} payout for ${input.projectName || input.projectId}.`,
-      blob: {
-        supplierName: input.supplierName,
-        projectId: input.projectId,
-        projectName: input.projectName,
-        destinationAddress: input.destinationAddress,
-        memo,
-        currency: input.currency?.trim().toUpperCase() || "XRP",
-      },
-    },
   };
-  const payload = await sdk.payload.create(payloadBody as unknown as Parameters<typeof sdk.payload.create>[0]);
 
-  if (!payload) {
-    throw new Error("Unable to create Xaman payment request.");
+  console.log("Xaman txjson", txjson);
+
+  try {
+    const response = await fetch("https://xumm.app/api/v1/platform/payload", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": requireEnv("XUMM_API_KEY", "XAMAN_API_KEY"),
+        "x-api-secret": requireEnv("XUMM_API_SECRET", "XAMAN_API_SECRET"),
+      },
+      body: JSON.stringify(payloadBody),
+    });
+    const xamanResponse = await readXamanResponse(response);
+
+    if (!response.ok || !xamanResponse.body || !("next" in xamanResponse.body)) {
+      console.error("Xaman payload API response", {
+        status: response.status,
+        response: xamanResponse.body ?? xamanResponse.raw,
+        payload: getPayloadLogContext(input, txjson),
+      });
+      throw new Error(getXamanApiMessage(xamanResponse.body, `Xaman API returned HTTP ${response.status}.`));
+    }
+
+    return xamanResponse.body as unknown as XamanPayloadResponse;
+  } catch (error) {
+    console.error("Xaman payment payload request failed", {
+      error: getErrorMessage(error),
+      payload: getPayloadLogContext(input, txjson),
+    });
+    throw error;
   }
-
-  return payload;
 }
 
 export async function getPayload(uuid: string) {

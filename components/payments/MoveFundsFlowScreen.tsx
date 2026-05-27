@@ -53,7 +53,7 @@ export function MoveFundsFlowScreen() {
       availableBalanceLabel: "$42,300",
     });
 
-    router.push("/payments/make-payment");
+    router.push("/payments/send");
   };
 
   return (

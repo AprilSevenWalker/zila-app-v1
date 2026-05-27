@@ -6,21 +6,20 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  ChevronDown,
   CheckCircle2,
+  Copy,
   LoaderCircle,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 
-import { clearPaymentDraft, getPaymentDraft } from "@/lib/paymentDraftStore";
+import { clearPaymentDraft, getDefaultPaymentDraft, getPaymentDraft, savePaymentDraft } from "@/lib/paymentDraftStore";
 import { FlowBackNav } from "@/components/ui/FlowBackNav";
 import { getMoneySourceState, saveMoneySourceState, subscribeToMoneySource } from "@/lib/moneySourceStore";
 import {
   getProtectedMoneySummary,
+  applyReserveForPayment,
   recordPaymentReserveRecalculation,
   subscribeToProtectedMoney,
-  useReserveForPayment,
   type ProtectedReserve,
 } from "@/lib/protectedMoneyStore";
 import {
@@ -35,6 +34,8 @@ import {
 } from "@/lib/proofTransactionStore";
 import { createOperationalProofRecord, saveOperationalProofRecord } from "@/lib/proof";
 import { OperationalWalletStatus } from "@/components/ui/OperationalWalletStatus";
+import { getProjects } from "@/data/projects";
+import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
 
 type FlowState = "details" | "review" | "awaiting-signature" | "signing" | "processing" | "success" | "failed";
 
@@ -72,6 +73,13 @@ interface PendingOperationalPayment {
   walletAddress: string;
 }
 
+interface PaymentSuccessRecord extends PaymentMovementRecord {
+  ledgerIndex?: number;
+  validated?: boolean;
+  settlementRail: string;
+  reserveAfterLabel: string;
+}
+
 type PayoutRail = "Stablecoin" | "Bank transfer" | "Mobile money";
 type PayoutCurrency = "USD" | "KES" | "USDT" | "USDC" | "RLUSD" | "XRP";
 type PayoutMode = "manual" | "existing";
@@ -93,12 +101,11 @@ interface SupplierProfile {
 const pendingPaymentStorageKey = "zila-xaman-operational-payment";
 const supplierStorageKey = "zila-operational-suppliers";
 
-const projects = ["Project Horizon", "Atlas Project", "Northstar Project", "Helix Project"];
 const reasons = ["Supplier payment", "Contractor payment", "Send project funds", "Move operational funds"];
 const payoutTimings = ["Ready today", "Due this week", "After invoice approval", "Milestone release", "Schedule manually"];
 const milestones = ["Foundation phase", "Delivery window", "Production milestone", "Final supplier release", "No linked milestone"];
 const payoutCurrencies: PayoutCurrency[] = ["USD", "KES", "USDT", "USDC", "RLUSD", "XRP"];
-const projectOptions = ["General operations", ...projects];
+const defaultProjectOption = "General operations";
 const defaultDestinationAddress = "";
 const reserveOptions = [
   { id: "recommend", name: "Let Zila recommend", amount: 24220, explanation: "Zila suggests the safest source based on reserves and payout size." },
@@ -219,6 +226,30 @@ function formatTime(dateIso: string) {
   }).format(new Date(dateIso));
 }
 
+function looksLikeXrplAddress(address: string) {
+  const trimmed = address.trim();
+  return /^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(trimmed);
+}
+
+function isDraftReadyForReview(draft: ReturnType<typeof getPaymentDraft>) {
+  return Boolean(
+    draft.recipientName?.trim()
+      && draft.destinationAddress?.trim()
+      && draft.amountValue > 0
+      && draft.currency
+      && draft.projectName
+      && draft.paymentRail,
+  );
+}
+
+function FieldMessage({ message }: { message?: string }) {
+  if (!message) {
+    return null;
+  }
+
+  return <span className="mt-2 block text-[12px] font-medium text-[#FFE8B0]">{message}</span>;
+}
+
 function buildRecommendation(input: {
   amount: number;
   safeBefore: number;
@@ -318,7 +349,13 @@ function storeSuppliers(suppliers: SupplierProfile[]) {
 
 export function SendMoneyScreen() {
   const searchParams = useSearchParams();
-  const draft = getPaymentDraft();
+  const [visibleProjects, setVisibleProjects] = useState(() => mergeOperationalProjects(getProjects()));
+  const projectOptions = useMemo(
+    () => [defaultProjectOption, ...visibleProjects.map((project) => project.name)],
+    [visibleProjects],
+  );
+  const [draft, setDraft] = useState(getDefaultPaymentDraft);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [moneySource, setMoneySource] = useState(getMoneySourceState);
   const [summary, setSummary] = useState(getProtectedMoneySummary);
   const [suppliers, setSuppliers] = useState(getStoredSuppliers);
@@ -328,27 +365,54 @@ export function SendMoneyScreen() {
   const [editingSupplierId, setEditingSupplierId] = useState<string | null>(null);
   const [supplierForm, setSupplierForm] = useState(emptySupplierForm);
   const [recipient, setRecipient] = useState(draft.recipientName || "");
-  const [projectName, setProjectName] = useState(draft.projectName || projectOptions[0]);
-  const [sourceId, setSourceId] = useState("recommend");
+  const [projectName, setProjectName] = useState(draft.projectName || defaultProjectOption);
+  const [sourceId, setSourceId] = useState(draft.reserveSourceId || "recommend");
   const [amount, setAmount] = useState(draft.amountValue ? String(draft.amountValue) : "");
   const [reason, setReason] = useState(draft.paymentType || reasons[0]);
   const [payoutTiming, setPayoutTiming] = useState(payoutTimings[0]);
-  const [linkedMilestone, setLinkedMilestone] = useState(milestones[0]);
+  const [linkedMilestone, setLinkedMilestone] = useState(draft.milestone || milestones[0]);
   const [payoutNotes, setPayoutNotes] = useState(draft.notes || "");
   const [payoutCurrency, setPayoutCurrency] = useState<PayoutCurrency>((draft.currency as PayoutCurrency) || "XRP");
   const [preferredRail, setPreferredRail] = useState<PayoutRail>((draft.paymentRail as PayoutRail) || "Stablecoin");
-  const [destinationAddress, setDestinationAddress] = useState(defaultDestinationAddress);
-  const [flowState, setFlowState] = useState<FlowState>("details");
-  const [paymentRecord, setPaymentRecord] = useState<PaymentMovementRecord | null>(null);
+  const [destinationAddress, setDestinationAddress] = useState(draft.destinationAddress || defaultDestinationAddress);
+  const [flowState, setFlowState] = useState<FlowState>(() => (isDraftReadyForReview(draft) ? "review" : "details"));
+  const [paymentRecord, setPaymentRecord] = useState<PaymentSuccessRecord | null>(null);
   const [activePayload, setActivePayload] = useState<XamanPayloadRequest | null>(null);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [copiedTxHash, setCopiedTxHash] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const storedDraft = getPaymentDraft();
+
+    setDraft(storedDraft);
+    setRecipient(storedDraft.recipientName || "");
+    setProjectName(storedDraft.projectName || defaultProjectOption);
+    setSourceId(storedDraft.reserveSourceId || "recommend");
+    setAmount(storedDraft.amountValue ? String(storedDraft.amountValue) : "");
+    setReason(storedDraft.paymentType || reasons[0]);
+    setLinkedMilestone(storedDraft.milestone || milestones[0]);
+    setPayoutNotes(storedDraft.notes || "");
+    setPayoutCurrency((storedDraft.currency as PayoutCurrency) || "XRP");
+    setPreferredRail((storedDraft.paymentRail as PayoutRail) || "Stablecoin");
+    setDestinationAddress(storedDraft.destinationAddress || defaultDestinationAddress);
+    setFlowState(isDraftReadyForReview(storedDraft) ? "review" : "details");
+    setDraftLoaded(true);
+  }, []);
 
   useEffect(() => {
     const update = () => setSummary(getProtectedMoneySummary());
 
     update();
     return subscribeToProtectedMoney(update);
+  }, []);
+
+  useEffect(() => {
+    const update = () => setVisibleProjects(mergeOperationalProjects(getProjects()));
+
+    update();
+    return subscribeToOperationalProjects(update);
   }, []);
 
   useEffect(() => {
@@ -401,6 +465,27 @@ export function SendMoneyScreen() {
     : `${projectName} selected. Zila will use this context without locking payout details.`;
   const projectSuggestions = suggestedPayouts.filter((suggestion) => projectName === "General operations" || suggestion.projectName === projectName);
 
+  useEffect(() => {
+    if (!draftLoaded) {
+      return;
+    }
+
+    savePaymentDraft({
+      projectName,
+      amountValue,
+      paymentType: reason,
+      recipientName: recipient,
+      destinationAddress,
+      currency: payoutCurrency,
+      paymentRail: preferredRail,
+      notes: payoutNotes,
+      milestone: linkedMilestone,
+      reserveSourceId: sourceId,
+      reserveSourceLabel: sourceLabel,
+      sourceLabel,
+    });
+  }, [amountValue, destinationAddress, draftLoaded, linkedMilestone, payoutCurrency, payoutNotes, preferredRail, projectName, reason, recipient, sourceId, sourceLabel]);
+
   const finalizePayment = async (payloadId: string) => {
     const pending = getPendingPayment();
     const response = await fetch(`/api/payments/status/${payloadId}`, { cache: "no-store" });
@@ -430,7 +515,7 @@ export function SendMoneyScreen() {
       network: "XRPL Mainnet",
       proofEnabled: true,
     });
-    const record: PaymentMovementRecord = {
+    const movementRecord: PaymentMovementRecord = {
       id: `payment-movement-${Date.now()}`,
       type: "outgoing",
       title: `${pending.reason} completed`,
@@ -445,10 +530,17 @@ export function SendMoneyScreen() {
       explorerUrl: buildXrplExplorerUrl(txHash),
       createdAtIso,
     };
+    const successRecord: PaymentSuccessRecord = {
+      ...movementRecord,
+      ledgerIndex: body.ledgerIndex,
+      validated: body.validated ?? true,
+      settlementRail: "XRPL settlement through Xaman",
+      reserveAfterLabel: formatCurrency(pending.protectedAfter),
+    };
 
-    savePaymentMovement(record);
+    savePaymentMovement(movementRecord);
     if (pending.reserveId) {
-      useReserveForPayment({
+      applyReserveForPayment({
         reserveId: pending.reserveId,
         amount: pending.amountValue,
         paymentLabel: pending.reason,
@@ -513,10 +605,20 @@ export function SendMoneyScreen() {
     }));
     clearPaymentDraft();
     clearPendingPayment();
-    setPaymentRecord(record);
+    setPaymentRecord(successRecord);
     setActivePayload(null);
     setPaymentMessage("Payment confirmed and proof record updated.");
     setFlowState("success");
+  };
+
+  const handleCopyTxHash = async () => {
+    if (!paymentRecord?.txHash) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(paymentRecord.txHash);
+    setCopiedTxHash(true);
+    window.setTimeout(() => setCopiedTxHash(false), 1400);
   };
 
   useEffect(() => {
@@ -675,7 +777,7 @@ export function SendMoneyScreen() {
     setPayoutMode("manual");
     setSelectedSupplierId("");
     setRecipient("");
-    setProjectName(projectOptions[0]);
+    setProjectName(defaultProjectOption);
     setAmount("");
     setPayoutCurrency("XRP");
     setPreferredRail("Stablecoin");
@@ -709,28 +811,47 @@ export function SendMoneyScreen() {
   };
 
   const validatePaymentReadiness = () => {
+    const nextErrors: Record<string, string> = {};
+
     if (!amountValue || flowState === "processing") {
-      return "Enter the amount you want to pay before approval.";
+      nextErrors.amount = "Enter the payout amount.";
     }
 
     if (!recipient.trim()) {
-      return "Add who you are paying before approval.";
+      nextErrors.recipient = "Add a supplier or payee before continuing.";
     }
 
     if (!destinationAddress.trim()) {
-      return "Add the recipient XRPL address before approval.";
+      nextErrors.destination = "Add the recipient wallet address before sending.";
+    } else if (!looksLikeXrplAddress(destinationAddress)) {
+      nextErrors.destination = "Enter a valid recipient XRP Ledger address before approval.";
+    }
+
+    if (!projectName) {
+      nextErrors.project = "Choose a project.";
     }
 
     if (!payoutCurrency) {
-      return "Choose the payment currency before approval.";
-    }
-
-    if (!sourceId) {
-      return "Choose where the money should come from before approval.";
+      nextErrors.currency = "Choose a currency.";
     }
 
     if (!preferredRail) {
-      return "Choose the payment rail before approval.";
+      nextErrors.rail = "Choose how this payment should move.";
+    }
+
+    if (!sourceId) {
+      nextErrors.source = "Choose where the money should come from before approval.";
+    }
+
+    setFieldErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFlowState("details");
+      return "Complete the required payment details before review.";
+    }
+
+    if (moneySource.walletAddress?.trim().toLowerCase() === destinationAddress.trim().toLowerCase()) {
+      return "You can’t send this payout to the same wallet connected as the sender. Add a supplier or payee destination.";
     }
 
     if (!moneySource.connected || !moneySource.walletAddress) {
@@ -748,17 +869,13 @@ export function SendMoneyScreen() {
     const validationMessage = validatePaymentReadiness();
     if (validationMessage) {
       setPaymentMessage(validationMessage);
-      if (validationMessage.includes("XRPL address")) {
+      if (validationMessage.includes("XRPL address") || validationMessage.includes("wallet address") || validationMessage.includes("money should come from")) {
         setAdvancedOpen(true);
       }
       return;
     }
 
-    if (flowState !== "review") {
-      setFlowState("review");
-      setPaymentMessage("Review carefully. The next action opens Xaman for a real mainnet transaction.");
-      return;
-    }
+    setFieldErrors({});
 
     setFlowState("processing");
     setPaymentMessage("Preparing signing request...");
@@ -778,19 +895,19 @@ export function SendMoneyScreen() {
         body: JSON.stringify({
           supplierName: recipient,
           amount: String(amountValue),
-          destinationAddress,
+          destinationAddress: destinationAddress.trim(),
           memo: [reason, projectName, linkedMilestone, payoutNotes].filter(Boolean).join(" · "),
           projectId: projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
           projectName,
           senderAddress: moneySource.walletAddress,
           currency: "XRP",
-          returnPath: "/payments/make-payment",
+          returnPath: "/payments/send",
         }),
       });
-      const body = (await response.json()) as XamanPayloadRequest & { error?: string };
+      const body = (await response.json()) as XamanPayloadRequest & { error?: string; detail?: string };
 
       if (!response.ok) {
-        throw new Error(body.error || "Unable to prepare signing request.");
+        throw new Error(body.error || body.detail || "Unable to prepare signing request.");
       }
 
       setPendingPayment({
@@ -802,7 +919,7 @@ export function SendMoneyScreen() {
         recipient,
         reason,
         reserveId: selectedReserve?.id,
-        destinationAddress,
+        destinationAddress: destinationAddress.trim(),
         safeBefore,
         safeAfter,
         protectedAfter,
@@ -817,9 +934,27 @@ export function SendMoneyScreen() {
     }
   };
 
+  const handleSaveDraft = () => {
+    savePaymentDraft({
+      projectName,
+      amountValue,
+      paymentType: reason,
+      recipientName: recipient,
+      destinationAddress,
+      currency: payoutCurrency,
+      paymentRail: preferredRail,
+      notes: payoutNotes,
+      milestone: linkedMilestone,
+      reserveSourceId: sourceId,
+      reserveSourceLabel: sourceLabel,
+      sourceLabel,
+    });
+    setPaymentMessage("Draft saved.");
+  };
+
   return (
-    <div className="-mx-4 -mt-2 flex min-h-[calc(100vh-7.5rem)] flex-col overflow-hidden bg-[radial-gradient(ellipse_at_18%_0%,rgba(255,255,255,0.24),transparent_30%),radial-gradient(ellipse_at_84%_8%,rgba(103,232,249,0.18),transparent_28%),linear-gradient(160deg,#12325A_0%,#173D6D_44%,#102A4F_100%)] px-6 pb-28 pt-8 text-white md:-mx-6 md:rounded-[36px] md:px-8 md:pb-12 lg:-mx-8 lg:px-10">
-      <div className="pointer-events-none absolute inset-x-0 top-12 h-96 bg-[radial-gradient(circle_at_20%_18%,rgba(103,232,249,0.18),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(109,94,248,0.14),transparent_24%)]" />
+    <div className="-mx-4 -mt-2 flex min-h-[calc(100vh-7.5rem)] flex-col overflow-hidden bg-[radial-gradient(ellipse_at_18%_0%,rgba(255,255,255,0.24),transparent_30%),radial-gradient(ellipse_at_84%_8%,rgba(103,232,249,0.18),transparent_28%),linear-gradient(160deg,#12325A_0%,#173D6D_44%,#102A4F_100%)] px-6 pb-16 pt-8 text-white md:-mx-6 md:rounded-[36px] md:px-8 md:pb-10 lg:-mx-8 lg:px-10">
+      <div className="pointer-events-none absolute inset-x-0 top-12 h-96 bg-[radial-gradient(circle_at_20%_18%,rgba(103,232,249,0.16),transparent_34%),radial-gradient(circle_at_78%_22%,rgba(109,94,248,0.12),transparent_24%)]" />
       <div className="relative flex flex-1 flex-col">
         <FlowBackNav
           items={[
@@ -829,504 +964,265 @@ export function SendMoneyScreen() {
         />
 
         <div className="mt-7 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-[560px]">
-            <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-[#BFEFFF]">Create operational payout</p>
-            <h1 className="mt-4 text-[40px] font-semibold leading-[0.98] tracking-[-0.055em] text-white">Coordinate a payout safely.</h1>
-            <p className="mt-5 max-w-[440px] text-[16px] leading-[1.68] text-[#DCE8FF]/88">
-              Enter who needs to be paid, choose the project, and let Zila show what the payment changes before money moves.
+          <div className="max-w-[620px]">
+            <p className="text-[12px] font-medium uppercase tracking-[0.22em] text-[#BFEFFF]">Operational payout workspace</p>
+            <h1 className="mt-4 text-[40px] font-semibold leading-[0.98] tracking-[-0.055em] text-white">Prepare and approve a payout.</h1>
+            <p className="mt-5 max-w-[500px] text-[16px] leading-[1.68] text-[#DCE8FF]/88">
+              Enter the details once. Zila shows the impact and attaches proof automatically after XRPL confirmation.
             </p>
           </div>
           <OperationalWalletStatus />
         </div>
 
         {flowState === "success" && paymentRecord ? (
-          <section className="mt-8 rounded-[30px] border border-[#D9FF57]/22 bg-[linear-gradient(180deg,rgba(217,255,87,0.13),rgba(16,42,79,0.42))] p-6 shadow-[0_24px_58px_rgba(31,68,116,0.22),0_0_30px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.12)]">
-            <div className="flex items-start justify-between gap-4">
+          <section className="mt-8 overflow-hidden rounded-[32px] border border-[#D9FF57]/22 bg-[radial-gradient(circle_at_12%_0%,rgba(217,255,87,0.13),transparent_28%),radial-gradient(circle_at_86%_8%,rgba(103,232,249,0.13),transparent_28%),linear-gradient(180deg,rgba(30,74,125,0.74),rgba(16,42,79,0.72))] p-6 shadow-[0_28px_68px_rgba(31,68,116,0.24),0_0_34px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.14)] md:p-7">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F1FFB8]">Payment completed</p>
-                <h2 className="mt-3 text-[30px] font-semibold tracking-[-0.055em]">Supplier payment completed successfully.</h2>
-                <p className="mt-3 max-w-[520px] text-[15px] leading-[1.7] text-[#E8F7D1]">
-                  {paymentRecord.amountLabel} moved to {paymentRecord.recipientName}. Proof of Operations and payment history were updated.
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F1FFB8]">Validated on XRPL Mainnet</p>
+                <h2 className="mt-3 text-[40px] font-semibold leading-none tracking-[-0.06em]">Payment confirmed</h2>
+                <p className="mt-3 max-w-[620px] text-[15px] leading-[1.7] text-[#E8F7D1]">
+                  Settlement verified. Operational proof synced. This payout now has an immutable payment reference.
                 </p>
               </div>
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-[16px] border border-white/16 bg-white/12 text-[#F1FFB8]">
-                <CheckCircle2 className="h-[20px] w-[20px]" strokeWidth={2} />
-              </span>
+              <div className="flex items-center gap-3 rounded-[22px] border border-white/14 bg-white/[0.08] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/16 bg-white/12 text-[#F1FFB8]">
+                  <CheckCircle2 className="h-[20px] w-[20px]" strokeWidth={2} />
+                </span>
+                <div>
+                  <p className="text-[12px] font-semibold text-white">Settlement verified</p>
+                  <p className="mt-1 text-[11px] text-[#C9D4F5]">{paymentRecord.ledgerIndex ? `Ledger ${paymentRecord.ledgerIndex}` : "Ledger confirmation received"}</p>
+                </div>
+              </div>
             </div>
-            <div className="mt-6 grid gap-3 md:grid-cols-4">
+            <div className="mt-7 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {[
+                ["Amount", paymentRecord.amountLabel],
+                ["Recipient / supplier", paymentRecord.recipientName ?? "Payee"],
                 ["Project", paymentRecord.project],
-                ["Source", paymentRecord.sourceLabel],
-                ["Status", paymentRecord.status],
-                ["Reference", `OPS-${paymentRecord.txHash.slice(0, 8)}`],
+                ["Timestamp", new Date(paymentRecord.createdAtIso).toLocaleString()],
+                ["Ledger confirmation", paymentRecord.ledgerIndex ? `Ledger ${paymentRecord.ledgerIndex}` : "Confirmed"],
+                ["Settlement rail", paymentRecord.settlementRail],
+                ["Validation status", paymentRecord.validated ? "Validated on XRPL Mainnet" : "Settlement verified"],
+                ["Proof", "Proof attached automatically"],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-[18px] border border-white/12 bg-white/[0.08] p-4">
+                <div key={label} className="rounded-[20px] border border-white/12 bg-white/[0.08] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#C9D4F5]">{label}</p>
-                  <p className="mt-2 text-[15px] font-semibold text-white">{value}</p>
+                  <p className="mt-2 break-words text-[15px] font-semibold text-white">{value}</p>
                 </div>
               ))}
             </div>
+            <div className="mt-3 rounded-[20px] border border-[#67E8F9]/18 bg-[#102A4F]/58 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#BFEFFF]">XRPL transaction hash</p>
+              <p className="mt-2 break-all font-mono text-[13px] font-semibold leading-[1.6] text-white">{paymentRecord.txHash}</p>
+            </div>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link href="/proof" className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-[#111827]">
+              <Link href="/proof" className="inline-flex h-11 items-center justify-center rounded-full border border-white/16 bg-white/[0.08] px-4 text-[13px] font-semibold text-[#EAF1FF]">
                 View proof
-                <ArrowRight className="h-[13px] w-[13px]" strokeWidth={2} />
               </Link>
+              <a href={paymentRecord.explorerUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-[#111827]">
+                View on XRPL
+                <ArrowRight className="h-[13px] w-[13px]" strokeWidth={2} />
+              </a>
+              <button type="button" onClick={handleCopyTxHash} className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-white/16 bg-white/[0.08] px-4 text-[13px] font-semibold text-[#EAF1FF]">
+                <Copy className="h-[13px] w-[13px]" strokeWidth={2} />
+                {copiedTxHash ? "Copied" : "Copy tx hash"}
+              </button>
               <Link href="/payments" className="inline-flex h-11 items-center justify-center rounded-full border border-white/16 bg-white/[0.08] px-4 text-[13px] font-semibold text-[#EAF1FF]">
-                Payment history
+                Back to payments
+              </Link>
+              <Link href="/home" className="inline-flex h-11 items-center justify-center rounded-full border border-white/16 bg-white/[0.08] px-4 text-[13px] font-semibold text-[#EAF1FF]">
+                Back to dashboard
+              </Link>
+              <Link href="/home" className="inline-flex h-11 items-center justify-center rounded-full bg-[#D9FF57] px-4 text-[13px] font-semibold text-[#102A4F] shadow-[0_16px_34px_rgba(217,255,87,0.14)]">
+                Done
               </Link>
             </div>
           </section>
         ) : (
-          <form onSubmit={(event) => event.preventDefault()} className="mt-8 space-y-5">
-            {flowState === "review" ? (
-              <section className="rounded-[28px] border border-[#D9FF57]/22 bg-[linear-gradient(180deg,rgba(217,255,87,0.12),rgba(16,42,79,0.56))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),0_0_24px_rgba(217,255,87,0.06),inset_0_1px_0_rgba(255,255,255,0.10)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F1FFB8]">Step 4 · Confirm payout</p>
-                <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.045em] text-white">Confirm and send this payout.</h2>
-                <p className="mt-2 max-w-[620px] text-[13px] leading-[1.65] text-[#E8F7D1]">
-                  The next action opens Xaman for approval and creates a real XRPL Mainnet transaction. Use a very small XRP amount for your first test.
-                </p>
-                <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                  {[
-                    ["Recipient", recipient],
-                    ["Sending from", moneySource.walletAddressShort || "Xaman wallet"],
-                    ["Project", projectName],
-                    ["Amount", formatPayoutAmount(amountValue, payoutCurrency)],
-                    ["Currency", payoutCurrency],
-                    ["Reserve source", sourceLabel],
-                    ["Payment reason", reason],
-                    ["Reserve impact", `${formatCurrency(protectedAfter)} protected after payout`],
-                    ["Proof record", `${projectName}, ${recipient}, amount, reserve source, and XRPL reference`],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-[16px] border border-white/10 bg-white/[0.08] px-3.5 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C9D4F5]">{label}</p>
-                      <p className="mt-1 text-[13px] font-semibold leading-[1.4] text-white">{value}</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button type="button" onClick={() => setFlowState("details")} className="h-11 rounded-full border border-white/14 bg-white/[0.08] px-4 text-[13px] font-semibold text-[#EAF1FF]">
-                    Edit details
-                  </button>
-                  <button type="button" onClick={handleConfirm} className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(217,255,87,0.16)]">
-                    Confirm and send payout
-                    <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />
-                  </button>
-                </div>
-                {paymentMessage ? <p className="mt-3 text-[12px] font-medium text-[#FFE8B0]">{paymentMessage}</p> : null}
-              </section>
-            ) : null}
-
-            <section className="rounded-[30px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,42,79,0.72),rgba(12,31,58,0.56))] p-6 shadow-[0_24px_58px_rgba(31,68,116,0.22),inset_0_1px_0_rgba(255,255,255,0.11)]">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#67E8F9]">Step 1 · Create payout</p>
-                  <h2 className="mt-3 text-[28px] font-semibold leading-[1.05] tracking-[-0.055em] text-white">Create the payout first.</h2>
-                  <p className="mt-3 max-w-[520px] text-[13px] leading-[1.65] text-[#DCE8FF]/82">
-                    You stay in control of the supplier, project, amount, rail, and timing. Zila helps you understand the impact before money moves.
-                  </p>
-                </div>
-                <div className="rounded-[24px] border border-white/12 bg-white/[0.08] px-5 py-4 text-right">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#C9D4F5]">Amount</p>
-                  <p className="mt-1 text-[36px] font-semibold tracking-[-0.06em] text-white">{formatPayoutAmount(amountValue, payoutCurrency)}</p>
-                  <p className="mt-1 text-[12px] font-medium text-[#D9FF57]">{payoutCurrency} payout · {suggestedTiming}</p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-3 md:grid-cols-2">
-                {[
-                  {
-                    id: "manual" as PayoutMode,
-                    title: "Create manual payout",
-                    copy: "Start blank. You choose the supplier, project, amount, rail, and reason.",
-                    action: startManualPayout,
-                  },
-                  {
-                    id: "existing" as PayoutMode,
-                    title: "Select existing payment due",
-                    copy: "Use a due payment as a starting point, then edit anything before sending.",
-                    action: startExistingPaymentMode,
-                  },
-                ].map((mode) => {
-                  const active = payoutMode === mode.id;
-
-                  return (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={mode.action}
-                      className={`rounded-[20px] border p-4 text-left transition ${active ? "border-[#D9FF57]/34 bg-[#D9FF57]/10 shadow-[0_0_24px_rgba(217,255,87,0.08)]" : "border-white/10 bg-white/[0.055] hover:border-white/20 hover:bg-white/[0.08]"}`}
-                    >
-                      <span className="block text-[15px] font-semibold text-white">{mode.title}</span>
-                      <span className="mt-2 block text-[12px] leading-[1.55] text-[#C9D4F5]/78">{mode.copy}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <form onSubmit={(event) => event.preventDefault()} className="mt-8">
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.52fr)]">
+              <section className="rounded-[30px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,42,79,0.72),rgba(12,31,58,0.56))] p-6 shadow-[0_24px_58px_rgba(31,68,116,0.22),inset_0_1px_0_rgba(255,255,255,0.11)]">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-[13px] font-semibold text-white">Supplier</p>
-                    <p className="mt-1 text-[12px] text-[#C9D4F5]/76">Reusable payee profiles help Zila remember payout methods and project context.</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#67E8F9]">Payment details</p>
+                    <h2 className="mt-3 text-[28px] font-semibold leading-[1.05] tracking-[-0.055em] text-white">Enter payout details once.</h2>
                   </div>
-                  <button type="button" onClick={openAddSupplier} className="inline-flex h-10 items-center justify-center rounded-full border border-[#D9FF57]/22 bg-[#D9FF57]/12 px-4 text-[12px] font-semibold text-[#F1FFB8] transition hover:bg-[#D9FF57]/18">
-                    Add supplier
-                  </button>
+                  <div className="rounded-[22px] border border-white/12 bg-white/[0.08] px-4 py-3 text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#C9D4F5]">Amount</p>
+                    <p className="mt-1 text-[30px] font-semibold tracking-[-0.06em] text-white">{formatPayoutAmount(amountValue, payoutCurrency)}</p>
+                  </div>
                 </div>
 
-                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                  <label className="block">
-                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Choose saved supplier</span>
-                    <select value={selectedSupplierId} onChange={(event) => handleSelectSupplier(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
-                      <option value="">No saved supplier selected</option>
-                      {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.supplierName} · {supplier.companyName}</option>)}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Supplier / recipient name</span>
-                    <input value={recipient} onChange={(event) => setRecipient(event.target.value)} placeholder="Who are you paying?" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50 transition hover:border-white/22 focus:border-[#D9FF57]/44" />
-                  </label>
-                  {selectedSupplier ? (
-                    <button type="button" onClick={() => openEditSupplier(selectedSupplier)} className="h-12 self-end rounded-full border border-white/14 bg-white/[0.08] px-4 text-[12px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.12]">
-                      Edit supplier
+                <div className="mt-6 rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[13px] font-semibold text-white">Supplier / payee</p>
+                      <p className="mt-1 text-[12px] text-[#C9D4F5]/76">Use a saved supplier or enter a payee for this payout.</p>
+                    </div>
+                    <button type="button" onClick={supplierFormOpen ? () => setSupplierFormOpen(false) : openAddSupplier} className="inline-flex h-10 items-center justify-center rounded-full border border-[#D9FF57]/22 bg-[#D9FF57]/12 px-4 text-[12px] font-semibold text-[#F1FFB8] transition hover:bg-[#D9FF57]/18">
+                      {supplierFormOpen ? "Close" : "Add supplier"}
                     </button>
-                  ) : null}
-                </div>
-
-                {selectedSupplier ? (
-                  <div className="mt-3 grid gap-3 rounded-[18px] border border-white/10 bg-white/[0.05] p-3.5 md:grid-cols-3">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">Preferred payout</p>
-                      <p className="mt-1 text-[13px] font-semibold text-white">{selectedSupplier.preferredRail}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">Recipient information</p>
-                      <p className="mt-1 text-[13px] font-semibold text-white">
-                        {selectedSupplier.walletAddress ? `Wallet address ${shortenWalletAddress(selectedSupplier.walletAddress)}` : "Payout details needed"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">Payout memory</p>
-                      <p className="mt-1 text-[13px] font-semibold text-white">{selectedSupplier.historySummary}</p>
-                    </div>
                   </div>
-                ) : null}
 
-                {supplierFormOpen ? (
-                  <div className="mt-4 rounded-[22px] border border-white/12 bg-[#102A4F]/82 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[13px] font-semibold text-white">{editingSupplierId ? "Edit supplier" : "Add supplier"}</p>
-                        <p className="mt-1 text-[12px] text-[#C9D4F5]/76">Create a reusable supplier profile for future payouts.</p>
+                  {supplierFormOpen ? (
+                    <div className="mt-4 rounded-[22px] border border-white/12 bg-[#102A4F]/82 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[13px] font-semibold text-white">{editingSupplierId ? "Edit supplier" : "Add supplier"}</p>
+                          <p className="mt-1 text-[12px] text-[#C9D4F5]/76">You can cancel, close, or clear this draft anytime.</p>
+                        </div>
+                        <button type="button" onClick={() => setSupplierFormOpen(false)} className="rounded-full border border-white/12 px-3 py-1.5 text-[11px] font-semibold text-[#EAF1FF]">
+                          Close
+                        </button>
                       </div>
-                      <button type="button" onClick={() => setSupplierFormOpen(false)} className="rounded-full border border-white/12 px-3 py-1.5 text-[11px] font-semibold text-[#EAF1FF]">
-                        Close
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <input value={supplierForm.supplierName} onChange={(event) => setSupplierForm((form) => ({ ...form, supplierName: event.target.value }))} placeholder="Supplier name" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                        <input value={supplierForm.companyName} onChange={(event) => setSupplierForm((form) => ({ ...form, companyName: event.target.value }))} placeholder="Business / company" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                        <input value={supplierForm.walletAddress} onChange={(event) => setSupplierForm((form) => ({ ...form, walletAddress: event.target.value }))} placeholder="Recipient wallet address" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                        <input value={supplierForm.notes} onChange={(event) => setSupplierForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notes optional" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button type="button" onClick={handleSaveSupplier} className="inline-flex h-10 items-center justify-center rounded-full bg-white px-4 text-[12px] font-semibold text-[#111827]">
+                          Save supplier
+                        </button>
+                        <button type="button" onClick={() => setSupplierFormOpen(false)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 bg-white/[0.08] px-4 text-[12px] font-semibold text-[#EAF1FF]">
+                          Cancel
+                        </button>
+                        <button type="button" onClick={() => setSupplierForm(emptySupplierForm)} className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 bg-white/[0.08] px-4 text-[12px] font-semibold text-[#EAF1FF]">
+                          Remove draft supplier
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <label className="block">
+                      <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Saved supplier optional</span>
+                      <select value={selectedSupplierId} onChange={(event) => handleSelectSupplier(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                        <option value="">No saved supplier selected</option>
+                        {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.supplierName} · {supplier.companyName}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Supplier / payee *</span>
+                      <input value={recipient} onChange={(event) => {
+                        setRecipient(event.target.value);
+                        setFieldErrors((errors) => ({ ...errors, recipient: "" }));
+                      }} placeholder="Who are you paying?" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50 transition hover:border-white/22 focus:border-[#D9FF57]/44" />
+                      <FieldMessage message={fieldErrors.recipient} />
+                    </label>
+                    {selectedSupplier ? (
+                      <button type="button" onClick={() => openEditSupplier(selectedSupplier)} className="h-12 self-end rounded-full border border-white/14 bg-white/[0.08] px-4 text-[12px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.12]">
+                        Edit
                       </button>
-                    </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <input value={supplierForm.supplierName} onChange={(event) => setSupplierForm((form) => ({ ...form, supplierName: event.target.value }))} placeholder="Supplier name" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
-                      <input value={supplierForm.companyName} onChange={(event) => setSupplierForm((form) => ({ ...form, companyName: event.target.value }))} placeholder="Business / company" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
-                      <input value={supplierForm.walletAddress} onChange={(event) => setSupplierForm((form) => ({ ...form, walletAddress: event.target.value }))} placeholder="Recipient wallet address" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
-                      <select value={supplierForm.preferredRail} onChange={(event) => setSupplierForm((form) => ({ ...form, preferredRail: event.target.value as PayoutRail }))} className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none">
-                        <option>Stablecoin</option>
-                        <option>Bank transfer</option>
-                        <option>Mobile money</option>
-                      </select>
-                      <select value={supplierForm.currency} onChange={(event) => setSupplierForm((form) => ({ ...form, currency: event.target.value as PayoutCurrency }))} className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none">
-                        {payoutCurrencies.map((currency) => <option key={currency}>{currency}</option>)}
-                      </select>
-                      <input value={supplierForm.notes} onChange={(event) => setSupplierForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Payout notes" className="h-11 rounded-[15px] border border-white/12 bg-[#0C2343] px-3 text-[13px] text-white outline-none placeholder:text-[#C9D4F5]/48" />
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {projectOptions.map((project) => {
-                        const active = supplierForm.linkedProjects.includes(project);
-
-                        return (
-                          <button
-                            key={project}
-                            type="button"
-                            onClick={() => setSupplierForm((form) => ({
-                              ...form,
-                              linkedProjects: active
-                                ? form.linkedProjects.filter((item) => item !== project)
-                                : [...form.linkedProjects, project],
-                            }))}
-                            className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${active ? "border-[#D9FF57]/28 bg-[#D9FF57]/12 text-[#F1FFB8]" : "border-white/12 bg-white/[0.06] text-[#C9D4F5]"}`}
-                          >
-                            {project}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button type="button" onClick={handleSaveSupplier} className="mt-4 inline-flex h-10 items-center justify-center rounded-full bg-white px-4 text-[12px] font-semibold text-[#111827]">
-                      Save supplier
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_160px_170px]">
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Project</span>
-                  <select value={projectName} onChange={(event) => setProjectName(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
-                    {projectOptions.map((item) => <option key={item}>{item}</option>)}
-                  </select>
-                  <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">{supplierProjectHint}</span>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Amount</span>
-                  <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44" />
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Currency</span>
-                  <select value={payoutCurrency} onChange={(event) => setPayoutCurrency(event.target.value as PayoutCurrency)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
-                    {payoutCurrencies.map((currency) => <option key={currency} value={currency}>{currency}{currency === "XRP" ? " · available for mainnet test" : " · coming soon"}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payment rail</span>
-                  <select value={preferredRail} onChange={(event) => setPreferredRail(event.target.value as PayoutRail)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
-                    <option>Stablecoin</option>
-                    <option>Bank transfer</option>
-                    <option>Mobile money</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payout timing</span>
-                  <select value={payoutTiming} onChange={(event) => setPayoutTiming(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
-                    {payoutTimings.map((item) => <option key={item}>{item}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payout reason</span>
-                  <select value={reason} onChange={(event) => setReason(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
-                    {reasons.map((item) => <option key={item}>{item}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">What is this payment for?</span>
-                  <select value={linkedMilestone} onChange={(event) => setLinkedMilestone(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
-                    {milestones.map((item) => <option key={item}>{item}</option>)}
-                  </select>
-                </label>
-                <label className="block lg:col-span-3">
-                  <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payout notes</span>
-                  <input value={payoutNotes} onChange={(event) => setPayoutNotes(event.target.value)} placeholder="Optional context for this payout" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50" />
-                </label>
-              </div>
-            </section>
-
-            <section className="rounded-[26px] border border-white/12 bg-white/[0.055] p-5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Step 2 · Choose payment rail</p>
-                  <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-white">Choose how this payout should move.</h3>
-                </div>
-                <p className="text-[12px] text-[#C9D4F5]/76">Stablecoin is available now. Bank and mobile money are prepared for later.</p>
-              </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {[
-                  ["Stablecoin", "Available now", "Fast settlement for cross-border payout coordination."],
-                  ["Bank transfer", "Coming soon", "Multi-currency bank payouts with operational tracking."],
-                  ["Mobile money", "Coming soon", "Regional and field payouts for mobile-first corridors."],
-                ].map(([rail, status, copy]) => {
-                  const active = preferredRail === rail;
-
-                  return (
-                    <button
-                      key={rail}
-                      type="button"
-                      onClick={() => setPreferredRail(rail as PayoutRail)}
-                      className={`rounded-[20px] border p-4 text-left transition ${active ? "border-[#D9FF57]/34 bg-[#D9FF57]/10 shadow-[0_0_24px_rgba(217,255,87,0.08)]" : "border-white/10 bg-white/[0.06] hover:border-white/20 hover:bg-white/[0.08]"}`}
-                    >
-                      <span className="flex items-center justify-between gap-3">
-                        <span className="text-[15px] font-semibold text-white">{rail}</span>
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${status === "Available now" ? "bg-[#D9FF57]/14 text-[#F1FFB8]" : "bg-white/[0.08] text-[#C9D4F5]"}`}>{status}</span>
-                      </span>
-                      <span className="mt-3 block text-[12px] leading-[1.55] text-[#C9D4F5]/78">{copy}</span>
-                    </button>
-                  );
-                })}
-                </div>
-                <p className="mt-3 text-[12px] leading-[1.55] text-[#FFE8B0]">
-                  XRP is available for the first real test payment. Other currencies stay visible so teams can see what is coming next.
-                </p>
-              </section>
-
-            {payoutMode === "existing" ? (
-              <section className="rounded-[26px] border border-white/12 bg-white/[0.045] p-5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Existing payments due</p>
-                  <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-white">Choose a starting point, then edit it.</h3>
-                  <p className="mt-2 max-w-[560px] text-[13px] leading-[1.65] text-[#C9D4F5]/78">
-                    These are suggestions from project activity. They never lock the supplier, amount, currency, rail, or reason.
-                  </p>
-                </div>
-                <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  {projectSuggestions.map((suggestion) => (
-                    <button
-                      key={suggestion.id}
-                      type="button"
-                      onClick={() => applySuggestion(suggestion)}
-                      className="rounded-[18px] border border-white/10 bg-white/[0.06] p-4 text-left transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.09]"
-                    >
-                      <span className="block text-[14px] font-semibold text-white">{suggestion.title}</span>
-                      <span className="mt-2 block text-[12px] text-[#C9D4F5]/78">{suggestion.projectName} · suggested {formatPayoutAmount(Number(suggestion.amount), suggestion.currency)}</span>
-                      <span className="mt-3 inline-flex rounded-full border border-white/10 bg-white/[0.08] px-2.5 py-1 text-[11px] font-semibold text-[#EAF1FF]">
-                        Fill form
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <section className="grid gap-5 xl:grid-cols-[minmax(0,0.92fr)_minmax(360px,0.58fr)]">
-              <div className="rounded-[28px] border border-cyan-300/16 bg-[linear-gradient(180deg,rgba(103,232,249,0.12),rgba(16,42,79,0.48))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.10)]">
-                <div className="flex items-start gap-3">
-                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/12 bg-white/10 text-[#D9FF57]">
-                    <Sparkles className="h-[16px] w-[16px]" strokeWidth={2} />
-                  </span>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">Step 3 · Review operational impact</p>
-                    <p className="mt-2 text-[19px] font-semibold leading-[1.35] tracking-[-0.035em] text-white">{recommendation}</p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {[
-                        railSupported ? "Expected to arrive within 1 minute" : `${preferredRail} coming soon`,
-                        currencySupported ? "Payment ready" : `${payoutCurrency} coming soon`,
-                        safeAfter > 0 ? "Reserve still protected" : "Review reserves first",
-                        `Protected balance after payout ${formatCurrency(protectedAfter)}`,
-                      ].map((item) => (
-                        <span key={item} className="rounded-full border border-white/12 bg-white/[0.08] px-3 py-1.5 text-[11px] font-semibold text-[#EAF1FF]">
-                          {item}
-                        </span>
-                      ))}
-                    </div>
+                    ) : null}
                   </div>
                 </div>
-              </div>
 
-              <div className="rounded-[28px] border border-white/14 bg-[#F3F5F9]/94 p-5 text-[#111827] shadow-[0_20px_48px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(255,255,255,0.72)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1D4ED8]">Operational impact</p>
-                <div className="mt-4 space-y-2.5">
-                  {[
-                    ["Reserve remaining after payout", formatCurrency(protectedAfter)],
-                    ["Safe to spend after payout", formatCurrency(safeAfter)],
-                    ["Runway remaining", runwayRemaining],
-                    ["Payment status", risk.label],
-                    ["Proof", proofStatus],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex items-center justify-between gap-4 rounded-[14px] bg-white/72 px-3.5 py-3">
-                      <span className="text-[12px] font-medium text-[#65738B]">{label}</span>
-                      <strong className="text-right text-[13px] font-semibold text-[#111827]">{value}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-[24px] border border-white/12 bg-white/[0.06] p-4">
-              <button
-                type="button"
-                onClick={() => setAdvancedOpen((open) => !open)}
-                className="flex w-full items-center justify-between gap-3 text-left"
-              >
-                <span>
-                  <span className="block text-[13px] font-semibold text-white">More payout details</span>
-                  <span className="mt-1 block text-[12px] text-[#C9D4F5]/76">Recipient wallet address, money source, and proof settings.</span>
-                </span>
-                <ChevronDown className={`h-[18px] w-[18px] text-[#C9D4F5] transition ${advancedOpen ? "rotate-180" : ""}`} strokeWidth={2} />
-              </button>
-
-              {advancedOpen ? (
-                <div className="mt-4 grid gap-4 border-t border-white/10 pt-4 md:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Recipient wallet address</span>
-                    <input value={destinationAddress} onChange={(event) => setDestinationAddress(event.target.value)} placeholder="Recipient XRPL address" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50" />
-                    <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">Compatible XRPL wallet address (Xaman or any XRPL-supported wallet).</span>
+                <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1fr_150px]">
+                  <label className="block lg:col-span-2">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Recipient wallet address *</span>
+                    <input value={destinationAddress} onChange={(event) => {
+                      setDestinationAddress(event.target.value);
+                      setFieldErrors((errors) => ({ ...errors, destination: "" }));
+                    }} placeholder="Recipient XRPL address" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50" />
+                    <FieldMessage message={fieldErrors.destination} />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Money source</span>
-                    <select value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none">
-                      {reserveOptions.map((reserve) => (
-                        <option key={reserve.id} value={reserve.id}>
-                          {reserve.name} · {formatCurrency(reserve.amount)} available
-                        </option>
-                      ))}
-                    </select>
-                    <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">{selectedReserveOption.explanation}</span>
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Amount *</span>
+                    <input value={amount} onChange={(event) => {
+                      setAmount(event.target.value);
+                      setFieldErrors((errors) => ({ ...errors, amount: "" }));
+                    }} inputMode="decimal" placeholder="0.000001" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50 transition hover:border-white/22 focus:border-[#D9FF57]/44" />
+                    <FieldMessage message={fieldErrors.amount} />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Manual proof settings</span>
-                    <select value="Attach automatically" disabled className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F]/80 px-4 text-[14px] text-white outline-none opacity-90">
-                      <option>Attach automatically</option>
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Project *</span>
+                    <select value={projectName} onChange={(event) => {
+                      setProjectName(event.target.value);
+                      setFieldErrors((errors) => ({ ...errors, project: "" }));
+                    }} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                      {projectOptions.map((item) => <option key={item}>{item}</option>)}
                     </select>
-                    <span className="mt-2 block text-[11px] leading-[1.5] text-[#C9D4F5]/72">Zila creates the proof record after settlement confirmation.</span>
+                    <FieldMessage message={fieldErrors.project} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Currency *</span>
+                    <select value={payoutCurrency} onChange={(event) => {
+                      setPayoutCurrency(event.target.value as PayoutCurrency);
+                      setFieldErrors((errors) => ({ ...errors, currency: "" }));
+                    }} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                      {payoutCurrencies.map((currency) => <option key={currency} value={currency}>{currency}{currency === "XRP" ? " · available now" : " · later"}</option>)}
+                    </select>
+                    <FieldMessage message={fieldErrors.currency} />
+                  </label>
+                  <label className="block lg:col-span-2">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Payment rail *</span>
+                    <select value={preferredRail} onChange={(event) => {
+                      setPreferredRail(event.target.value as PayoutRail);
+                      setFieldErrors((errors) => ({ ...errors, rail: "" }));
+                    }} className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none transition hover:border-white/22 focus:border-[#D9FF57]/44">
+                      <option>Stablecoin</option>
+                      <option>Bank transfer</option>
+                      <option>Mobile money</option>
+                    </select>
+                    <FieldMessage message={fieldErrors.rail} />
+                  </label>
+                  <label className="block lg:col-span-3">
+                    <span className="mb-2 block text-[12px] font-medium text-[#C9D4F5]">Notes optional</span>
+                    <input value={payoutNotes} onChange={(event) => setPayoutNotes(event.target.value)} placeholder="Optional context for this payout" className="h-12 w-full rounded-[17px] border border-white/12 bg-[#102A4F] px-4 text-[14px] text-white outline-none placeholder:text-[#C9D4F5]/50" />
                   </label>
                 </div>
-              ) : null}
-            </section>
+              </section>
 
-            <section className="rounded-[28px] border border-[#D9FF57]/18 bg-[linear-gradient(180deg,rgba(217,255,87,0.10),rgba(16,42,79,0.52))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),0_0_24px_rgba(217,255,87,0.05),inset_0_1px_0_rgba(255,255,255,0.10)]">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F1FFB8]">Approval</p>
-                  <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.045em] text-white">Review this payout before sending.</h2>
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <aside className="space-y-5">
+                <section className="rounded-[28px] border border-white/14 bg-[#F3F5F9]/94 p-5 text-[#111827] shadow-[0_20px_48px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(255,255,255,0.72)]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1D4ED8]">Live operational impact</p>
+                  <div className="mt-4 space-y-2.5">
                     {[
-                      ["Payee", recipient],
-                      ["Connected wallet", moneySource.connected ? moneySource.walletAddressShort || "Connected" : "Not connected"],
-                      ["Amount", formatPayoutAmount(amountValue, payoutCurrency)],
-                      ["Estimated arrival", estimatedArrival],
-                      ["Money source", sourceLabel],
-                      ["Proof history", "Appears after payment"],
+                      ["Reserve remaining after payout", formatCurrency(protectedAfter)],
+                      ["Payment readiness", canApproveInXaman ? "Ready for Xaman" : "Use XRP and Stablecoin rail"],
+                      ["Cross-border route status", preferredRail === "Stablecoin" ? "XRPL route ready" : "Route preview only"],
+                      ["Estimated settlement speed", preferredRail === "Stablecoin" ? "Usually under 1 minute" : "Coming later"],
+                      ["Proof attached automatically", "Yes"],
                     ].map(([label, value]) => (
-                      <div key={label} className="rounded-[16px] border border-white/10 bg-white/[0.08] px-3.5 py-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#C9D4F5]">{label}</p>
-                        <p className="mt-1 text-[13px] font-semibold text-white">{value}</p>
+                      <div key={label} className="flex items-center justify-between gap-4 rounded-[14px] bg-white/72 px-3.5 py-3">
+                        <span className="text-[12px] font-medium text-[#65738B]">{label}</span>
+                        <strong className="text-right text-[13px] font-semibold text-[#111827]">{value}</strong>
                       </div>
                     ))}
                   </div>
-                  {!currencySupported || !railSupported ? (
-                    <p className="mt-3 text-[12px] font-medium text-[#FFE8B0]">
-                      {payoutCurrency} via {preferredRail} is coming soon. XRP through Stablecoin is available for the first real test payment.
+                  <div className="mt-5 rounded-[22px] border border-[#D9FF57]/18 bg-[#102A4F]/92 p-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F1FFB8]">Ready to approve</p>
+                    <p className="mt-2 text-[14px] leading-[1.6] text-[#DCE8FF]">
+                      {recipient || "Supplier"} · {formatPayoutAmount(amountValue, payoutCurrency)} · {projectName}
                     </p>
-                  ) : paymentMessage ? <p className="mt-3 text-[12px] font-medium text-[#FFE8B0]">{paymentMessage}</p> : null}
-                </div>
-                <button type="button" onClick={handleConfirm} disabled={flowState === "processing"} className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(217,255,87,0.16)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_42px_rgba(217,255,87,0.22)] disabled:cursor-not-allowed disabled:opacity-50">
-                  Review payout
-                  <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />
-                </button>
-              </div>
-            </section>
+                    {paymentMessage ? <p className="mt-2 text-[12px] font-medium text-[#FFE8B0]">{paymentMessage}</p> : null}
+                    <div className="mt-4 grid gap-2">
+                      <button type="button" onClick={handleConfirm} disabled={flowState === "processing"} className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(217,255,87,0.16)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_42px_rgba(217,255,87,0.22)] disabled:cursor-not-allowed disabled:opacity-50">
+                        Approve in Xaman
+                        <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />
+                      </button>
+                      <button type="button" onClick={handleSaveDraft} className="inline-flex h-11 items-center justify-center rounded-full border border-white/16 bg-white/[0.08] px-5 text-[13px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.12]">
+                        Save draft
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </aside>
+            </div>
           </form>
         )}
 
         {activePayload && (flowState === "awaiting-signature" || flowState === "signing") ? (
           <section className="mt-6 rounded-[26px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.12),rgba(16,42,79,0.62))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.10)]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <Image
-                src={activePayload.qrUrl}
-                alt="Xaman signing QR code"
-                width={136}
-                height={136}
-                unoptimized
-                className="h-36 w-36 rounded-[18px] border border-white/18 bg-white p-2"
-              />
+              <Image src={activePayload.qrUrl} alt="Xaman signing QR code" width={136} height={136} unoptimized className="h-36 w-36 rounded-[18px] border border-white/18 bg-white p-2" />
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">
-                  {flowState === "signing" ? "Signing" : "Awaiting signature"}
-                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">{flowState === "signing" ? "Signing" : "Awaiting approval"}</p>
                 <h2 className="mt-2 text-[22px] font-semibold tracking-[-0.04em] text-white">Approve in Xaman</h2>
-                <p className="mt-2 max-w-[420px] text-[13px] leading-[1.65] text-[#DCE8FF]">
-                  Zila will record the operational amount, project, source, and transaction reference after confirmation.
-                </p>
-                <Link
-                  href={activePayload.deepLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-white px-4 text-[13px] font-semibold text-[#111827]"
-                >
+                <p className="mt-2 max-w-[420px] text-[13px] leading-[1.65] text-[#DCE8FF]">Scan or open Xaman. Zila records proof automatically after confirmation.</p>
+                <Link href={activePayload.deepLink} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-white px-4 text-[13px] font-semibold text-[#111827]">
                   Open Xaman
                 </Link>
               </div>
@@ -1337,16 +1233,12 @@ export function SendMoneyScreen() {
         {flowState === "failed" ? (
           <section className="mt-6 rounded-[22px] border border-rose-200/20 bg-rose-300/[0.09] p-4">
             <p className="text-[14px] font-semibold text-[#FFD6DA]">{paymentMessage ?? "Payment could not be completed."}</p>
-            <button
-              type="button"
-              onClick={() => {
-                setFlowState("details");
-                setPaymentMessage(null);
-                setActivePayload(null);
-              }}
-              className="mt-3 inline-flex h-10 items-center justify-center rounded-full border border-white/14 bg-white/[0.10] px-4 text-[12px] font-semibold text-[#F4F8FF]"
-            >
-              Review again
+            <button type="button" onClick={() => {
+              setFlowState("details");
+              setPaymentMessage(null);
+              setActivePayload(null);
+            }} className="mt-3 inline-flex h-10 items-center justify-center rounded-full border border-white/14 bg-white/[0.10] px-4 text-[12px] font-semibold text-[#F4F8FF]">
+              Review details
             </button>
           </section>
         ) : null}
@@ -1356,9 +1248,7 @@ export function SendMoneyScreen() {
             <section className="w-full max-w-[380px] rounded-[26px] border border-white/16 bg-[linear-gradient(180deg,rgba(16,42,79,0.98),rgba(7,17,31,0.96))] p-6 text-center shadow-[0_28px_68px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.12)]">
               <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-[#67E8F9]" strokeWidth={2} />
               <h2 className="mt-5 text-[24px] font-semibold tracking-[-0.045em] text-white">Processing payment</h2>
-              <p className="mt-3 text-[14px] leading-[1.7] text-[#C9D4F5]">
-                {paymentMessage ?? "Zila is recording the operational update, proof reference, reserve impact, and project state."}
-              </p>
+              <p className="mt-3 text-[14px] leading-[1.7] text-[#C9D4F5]">{paymentMessage ?? "Waiting for Xaman and XRPL confirmation."}</p>
             </section>
           </div>
         ) : null}
@@ -1366,12 +1256,13 @@ export function SendMoneyScreen() {
         {flowState !== "success" ? (
           <div className="mt-auto flex items-center gap-3 pt-10 text-[12px] text-[#C9D4F5]">
             <ShieldCheck className="h-[14px] w-[14px] text-[#D9FF57]" strokeWidth={2} />
-            Every confirmed payment creates a Proof of Operations record.
+            Confirmed payments create proof automatically.
           </div>
         ) : null}
       </div>
     </div>
   );
+
 }
 
 export default SendMoneyScreen;

@@ -153,7 +153,7 @@ export function WelcomeScreen() {
                   </span>
                 </div>
                 <p className="text-[24px] font-semibold leading-[1.25] tracking-[-0.045em] text-white">
-                  Amara paid supplier $2,400
+                  Kevin paid supplier $2,400
                 </p>
                 <p className="mt-3 text-[19px] font-semibold leading-[1.3] tracking-[-0.035em] text-[#8CF5FF]">
                   → Remaining runway: 18 days

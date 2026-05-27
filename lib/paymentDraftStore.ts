@@ -5,9 +5,15 @@ export interface PaymentDraft {
   amountLabel: string;
   paymentType: string;
   recipientName?: string;
+  destinationAddress?: string;
+  destinationLabel?: string;
+  recipientType?: "supplier" | "payee" | "demo";
   currency?: string;
   paymentRail?: string;
   notes?: string;
+  milestone?: string;
+  reserveSourceId?: string;
+  reserveSourceLabel?: string;
   selectedAction: "full-payment" | "recommended-partial";
   sourceLabel: string;
   availableBalanceLabel: string;
@@ -23,9 +29,15 @@ const defaultDraft: PaymentDraft = {
   amountLabel: "$0",
   paymentType: "Supplier payment",
   recipientName: "",
+  destinationAddress: "",
+  destinationLabel: "",
+  recipientType: "supplier",
   currency: "XRP",
   paymentRail: "Stablecoin",
   notes: "",
+  milestone: "",
+  reserveSourceId: "recommend",
+  reserveSourceLabel: "Available balance",
   selectedAction: "full-payment",
   sourceLabel: "Available balance",
   availableBalanceLabel: "$42,300",
@@ -42,14 +54,14 @@ function normalizeAmount(value: unknown) {
     return 0;
   }
 
-  return Math.round(numeric);
+  return numeric;
 }
 
 function formatAmount(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0,
+    maximumFractionDigits: value < 1 ? 6 : 2,
   }).format(value);
 }
 
@@ -74,9 +86,15 @@ function safeParse(value: string | null): PaymentDraft {
       amountLabel: parsed.amountLabel || formatAmount(amountValue),
       paymentType: parsed.paymentType || defaultDraft.paymentType,
       recipientName: parsed.recipientName ?? defaultDraft.recipientName,
+      destinationAddress: parsed.destinationAddress ?? defaultDraft.destinationAddress,
+      destinationLabel: parsed.destinationLabel ?? defaultDraft.destinationLabel,
+      recipientType: parsed.recipientType ?? defaultDraft.recipientType,
       currency: parsed.currency ?? defaultDraft.currency,
       paymentRail: parsed.paymentRail ?? defaultDraft.paymentRail,
       notes: parsed.notes ?? defaultDraft.notes,
+      milestone: parsed.milestone ?? defaultDraft.milestone,
+      reserveSourceId: parsed.reserveSourceId ?? defaultDraft.reserveSourceId,
+      reserveSourceLabel: parsed.reserveSourceLabel ?? parsed.sourceLabel ?? defaultDraft.reserveSourceLabel,
       selectedAction: parsed.selectedAction || defaultDraft.selectedAction,
       sourceLabel: parsed.sourceLabel || defaultDraft.sourceLabel,
       availableBalanceLabel: parsed.availableBalanceLabel || defaultDraft.availableBalanceLabel,
@@ -94,6 +112,10 @@ export function getPaymentDraft() {
   return safeParse(window.localStorage.getItem(STORAGE_KEY));
 }
 
+export function getDefaultPaymentDraft() {
+  return defaultDraft;
+}
+
 export function savePaymentDraft(draft: Partial<PaymentDraft>) {
   if (!isBrowser()) {
     return;
@@ -108,11 +130,17 @@ export function savePaymentDraft(draft: Partial<PaymentDraft>) {
     amountLabel: draft.amountLabel || formatAmount(amountValue),
     paymentType: draft.paymentType || current.paymentType,
     recipientName: draft.recipientName ?? current.recipientName,
+    destinationAddress: draft.destinationAddress ?? current.destinationAddress,
+    destinationLabel: draft.destinationLabel ?? current.destinationLabel,
+    recipientType: draft.recipientType ?? current.recipientType,
     currency: draft.currency ?? current.currency,
     paymentRail: draft.paymentRail ?? current.paymentRail,
     notes: draft.notes ?? current.notes,
+    milestone: draft.milestone ?? current.milestone,
+    reserveSourceId: draft.reserveSourceId ?? current.reserveSourceId,
+    reserveSourceLabel: draft.reserveSourceLabel ?? current.reserveSourceLabel,
     selectedAction: draft.selectedAction || current.selectedAction,
-    sourceLabel: draft.sourceLabel || current.sourceLabel,
+    sourceLabel: draft.sourceLabel || draft.reserveSourceLabel || current.sourceLabel,
     availableBalanceLabel: draft.availableBalanceLabel || current.availableBalanceLabel,
   };
 

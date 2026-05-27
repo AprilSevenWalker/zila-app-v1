@@ -13,6 +13,7 @@ import {
   subscribeToLatestPaymentTransaction,
   type LatestPaymentTransaction,
 } from "@/lib/paymentTransactionStore";
+import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
 
 type HumanActivity = {
   person: string;
@@ -25,7 +26,7 @@ type HumanActivity = {
 const activityByProject: Record<string, HumanActivity[]> = {
   "harbour-road": [
     {
-      person: "Amara",
+      person: "Kevin",
       action: "logged a supplier payment",
       impact: "Remaining budget decreased by $2,000",
       impactTone: "negative",
@@ -40,7 +41,7 @@ const activityByProject: Record<string, HumanActivity[]> = {
   ],
   "palm-estate": [
     {
-      person: "Amara",
+      person: "Kevin",
       action: "recorded client payment",
       impact: "+$3,000 received",
       impactTone: "positive",
@@ -61,7 +62,7 @@ const activityByProject: Record<string, HumanActivity[]> = {
       impactTone: "negative",
     },
     {
-      person: "Amara",
+      person: "Kevin",
       action: "checked balance release",
       impact: "Next payment ready",
       impactTone: "neutral",
@@ -70,7 +71,7 @@ const activityByProject: Record<string, HumanActivity[]> = {
   ],
   "north-block": [
     {
-      person: "Amara",
+      person: "Kevin",
       action: "refreshed the forecast",
       impact: "$4,400 runway protected",
       impactTone: "positive",
@@ -87,7 +88,7 @@ const activityByProject: Record<string, HumanActivity[]> = {
 
 const crossProjectFeed = [
   {
-    person: "Amara",
+    person: "Kevin",
     action: "recorded payment",
     project: "Project Horizon",
     impact: "+$2,400",
@@ -102,7 +103,7 @@ const crossProjectFeed = [
     tone: "negative",
   },
   {
-    person: "Amara",
+    person: "Kevin",
     action: "refreshed forecast",
     project: "Helix Project",
     impact: "stable",
@@ -130,9 +131,9 @@ function MoneyMetric({ label, value, dark = false }: { label: string; value: str
 function getOperationalSignal(project: Project) {
   if (project.statusTone === "warning") {
     return {
-      label: project.id === "harbour-road" ? "Supplier pressure detected" : "Due soon",
-      detail: project.id === "harbour-road" ? "Safe-to-use recalculated" : "Payment sequence needs review",
-      toneClass: "border-[#B98B4A]/48 bg-[linear-gradient(180deg,rgba(79,51,21,0.62),rgba(18,30,48,0.82))] text-[#F0C777]",
+      label: project.id === "harbour-road" ? "Supplier timing in focus" : "Upcoming payment window",
+      detail: project.id === "harbour-road" ? "Safe-to-use recalculated" : "Payment sequence is being monitored",
+      toneClass: "border-[#D9FF57]/18 bg-[linear-gradient(180deg,rgba(217,255,87,0.10),rgba(27,70,116,0.42))] text-[#EAFFB4]",
     };
   }
 
@@ -153,7 +154,7 @@ function getOperationalSignal(project: Project) {
 
 function projectPillClass(tone: Project["statusTone"]) {
   if (tone === "warning") {
-    return "!border-[#B98B4A]/58 !bg-[#3A2A18] !text-[#F0C777] shadow-[0_0_14px_rgba(185,139,74,0.08),inset_0_1px_0_rgba(255,255,255,0.08)]";
+    return "!border-[#D9FF57]/24 !bg-[#D9FF57]/[0.08] !text-[#EAFFB4] shadow-[0_0_18px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.10)]";
   }
 
   if (tone === "success") {
@@ -165,7 +166,7 @@ function projectPillClass(tone: Project["statusTone"]) {
 
 function projectAccentClass(tone: Project["statusTone"]) {
   if (tone === "warning") {
-    return "from-[#B98B4A] via-[#8A6738] to-transparent";
+    return "from-[#D9FF57] via-[#67E8F9] to-transparent";
   }
 
   if (tone === "success") {
@@ -184,6 +185,72 @@ function getProjectOperations(project: Project) {
     reserve: pressure ? "Reserve review recommended" : "Reserve remains protected",
     activity: pressure ? "Pressure building" : "Normal operating rhythm",
     recommendation: pressure ? project.nextMoveSummary : project.zilaSuggestionShort,
+  };
+}
+
+function getOperationalConfidence(project: Project, paymentSynced = false, latestPayment: LatestPaymentTransaction | null = null) {
+  if (paymentSynced) {
+    return {
+      label: "RESERVE PROTECTED",
+      detail: `${latestPayment?.amountLabel ?? "Supplier payout"} settled. Reserve, proof, and operational memory synced.`,
+      pressure: "Updated now",
+      action: "Open project",
+      toneClass: "border-[#D9FF57]/22 bg-[#D9FF57]/[0.09] text-[#EAFFB4]",
+      panelClass: "border-[#D9FF57]/18 bg-[linear-gradient(180deg,rgba(217,255,87,0.10),rgba(255,255,255,0.055))]",
+    };
+  }
+
+  if (project.id === "harbour-road") {
+    return {
+      label: "SAFE TO APPROVE",
+      detail: "Supplier payout will not affect operational runway.",
+      pressure: "Northline payout due Friday",
+      action: "Coordinate payout",
+      toneClass: "border-[#D9FF57]/22 bg-[#D9FF57]/[0.09] text-[#EAFFB4]",
+      panelClass: "border-[#D9FF57]/18 bg-[linear-gradient(180deg,rgba(217,255,87,0.10),rgba(255,255,255,0.055))]",
+    };
+  }
+
+  if (project.id === "palm-estate") {
+    return {
+      label: "SAFE TO SPEND",
+      detail: "$10,500 available after protected reserve.",
+      pressure: "Weekly delivery review",
+      action: "Review spend",
+      toneClass: "border-[#67E8F9]/24 bg-[#67E8F9]/[0.10] text-[#DDFBFF]",
+      panelClass: "border-[#67E8F9]/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.10),rgba(255,255,255,0.055))]",
+    };
+  }
+
+  if (project.id === "buildops-site-a") {
+    return {
+      label: "REVIEW BEFORE APPROVAL",
+      detail: "Client settlement delay affects available balance.",
+      pressure: "Payment clearance due next",
+      action: "Review approval",
+      toneClass: "border-[#D9FF57]/22 bg-[#D9FF57]/[0.085] text-[#EAFFB4]",
+      panelClass: "border-[#D9FF57]/18 bg-[linear-gradient(180deg,rgba(217,255,87,0.09),rgba(255,255,255,0.05))]",
+    };
+  }
+
+  if (project.id === "north-block") {
+    return {
+      label: "RESERVE PROTECTED",
+      detail: "Current commitments remain covered after reserve recalculation.",
+      pressure: "Runway stable for 15 days",
+      action: "Open project",
+      toneClass: "border-[#67E8F9]/24 bg-[#67E8F9]/[0.10] text-[#DDFBFF]",
+      panelClass: "border-[#67E8F9]/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.10),rgba(255,255,255,0.055))]",
+    };
+  }
+
+  return {
+    label: "WATCH RUNWAY",
+    detail: "Upcoming obligations may tighten reserves.",
+    pressure: "Reserve recalculated",
+    action: "Protect reserve",
+    toneClass: "border-[#67E8F9]/24 bg-[#67E8F9]/[0.10] text-[#DDFBFF]",
+    panelClass: "border-[#67E8F9]/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.10),rgba(255,255,255,0.055))]",
   };
 }
 
@@ -221,20 +288,20 @@ function getPaymentProjectId(payment: LatestPaymentTransaction | null, projects:
 
 function pageAtmosphereClass(tone: Project["statusTone"]) {
   if (tone === "warning") {
-    return "before:bg-[radial-gradient(circle_at_78%_32%,rgba(185,139,74,0.16),transparent_30%),radial-gradient(circle_at_18%_64%,rgba(103,232,249,0.08),transparent_34%)]";
+    return "before:bg-[radial-gradient(circle_at_78%_24%,rgba(217,255,87,0.08),transparent_28%),radial-gradient(circle_at_18%_64%,rgba(103,232,249,0.14),transparent_36%),radial-gradient(circle_at_48%_8%,rgba(255,255,255,0.08),transparent_34%)]";
   }
 
   if (tone === "success") {
-    return "before:bg-[radial-gradient(circle_at_78%_28%,rgba(217,255,87,0.09),transparent_26%),radial-gradient(circle_at_18%_64%,rgba(103,232,249,0.13),transparent_34%)]";
+    return "before:bg-[radial-gradient(circle_at_78%_28%,rgba(217,255,87,0.08),transparent_28%),radial-gradient(circle_at_18%_64%,rgba(103,232,249,0.16),transparent_36%),radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.08),transparent_34%)]";
   }
 
-  return "before:bg-[radial-gradient(circle_at_78%_30%,rgba(103,232,249,0.10),transparent_30%),radial-gradient(circle_at_18%_64%,rgba(143,167,199,0.10),transparent_34%)]";
+  return "before:bg-[radial-gradient(circle_at_78%_30%,rgba(103,232,249,0.13),transparent_32%),radial-gradient(circle_at_18%_64%,rgba(143,167,199,0.12),transparent_36%),radial-gradient(circle_at_48%_4%,rgba(255,255,255,0.07),transparent_34%)]";
 }
 
 function LivePulse({ label = "Live" }: { label?: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-[#67E8F9]/34 bg-[#67E8F9]/14 px-3 py-1.5 text-[11px] font-semibold text-[#E8FCFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#67E8F9] shadow-[0_0_14px_rgba(103,232,249,0.34)]">
+    <span className="inline-flex items-center gap-2 rounded-full border border-[#67E8F9]/28 bg-[#67E8F9]/10 px-3 py-1.5 text-[11px] font-semibold text-[#E8FCFF] shadow-[0_10px_24px_rgba(103,232,249,0.08),inset_0_1px_0_rgba(255,255,255,0.10)]">
+      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#67E8F9] shadow-[0_0_16px_rgba(103,232,249,0.28)]">
         <span className="insight-signal-ripple absolute inset-0 rounded-full bg-[#67E8F9]" />
       </span>
       {label}
@@ -246,13 +313,16 @@ function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Pr
   const latestUpdate = activityByProject[project.id]?.[0];
   const operations = getProjectOperations(project);
   const paymentSynced = paymentMatchesProject(latestPayment, project);
+  const confidence = getOperationalConfidence(project, paymentSynced, latestPayment);
   const operationChips = paymentSynced
     ? ["Supplier payout completed", "Reserve recalculated", "Proof generated"]
-    : [operations.runway, operations.payout, operations.reserve];
+    : [confidence.pressure, operations.payout, operations.reserve];
+  const actionLabels = [confidence.action, project.secondaryActionLabel, "View proof history"];
 
   return (
-    <Link href={`/projects/${project.id}`} className={`group zila-surface-grain zila-hero-system-glow relative block min-h-[350px] cursor-pointer overflow-hidden rounded-[28px] border border-white/12 bg-[linear-gradient(145deg,#030815_0%,#0D1731_46%,#172D58_100%)] p-4.5 text-white shadow-[0_20px_60px_rgba(0,0,0,0.15),0_34px_86px_rgba(15,23,42,0.34),0_0_44px_rgba(34,211,238,0.10),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl transition-all duration-700 ease-out hover:-translate-y-1 hover:border-[#D9FF57]/22 hover:shadow-[0_26px_70px_rgba(0,0,0,0.18),0_40px_96px_rgba(15,23,42,0.36),0_0_52px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.12)] md:p-5 ${isActive ? "scale-100 opacity-100" : "scale-[0.94] opacity-65"}`}>
-      <div className="zila-hero-ambient absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.22),transparent_32%),radial-gradient(circle_at_84%_6%,rgba(217,255,87,0.08),transparent_24%)]" />
+    <Link href={`/projects/${project.id}`} className={`group zila-surface-grain zila-hero-system-glow relative block min-h-[350px] cursor-pointer overflow-hidden rounded-[30px] border border-white/18 bg-[linear-gradient(145deg,#173D6D_0%,#1E4A7D_46%,#102A4F_100%)] p-5 text-white shadow-[0_22px_62px_rgba(31,68,116,0.18),0_34px_86px_rgba(15,23,42,0.22),0_0_46px_rgba(103,232,249,0.08),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-xl transition-all duration-700 ease-out hover:-translate-y-1 hover:border-[#D9FF57]/18 hover:shadow-[0_26px_70px_rgba(31,68,116,0.20),0_40px_96px_rgba(15,23,42,0.24),0_0_56px_rgba(217,255,87,0.07),inset_0_1px_0_rgba(255,255,255,0.16)] md:p-6 ${isActive ? "scale-100 opacity-100" : "scale-[0.96] opacity-75"}`}>
+      <div className="zila-hero-ambient absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.18),transparent_34%),radial-gradient(circle_at_84%_6%,rgba(217,255,87,0.06),transparent_24%),radial-gradient(circle_at_52%_100%,rgba(255,255,255,0.08),transparent_42%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),transparent_52%,rgba(7,21,38,0.10))]" />
       <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(217,255,87,0.36),transparent)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       <div className="relative flex min-h-[304px] flex-col">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -261,12 +331,23 @@ function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Pr
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/12 bg-[linear-gradient(135deg,#1D4ED8,#0EA5E9)] text-[#F8FBFF] shadow-[0_0_28px_rgba(103,232,249,0.20),inset_0_1px_0_rgba(255,255,255,0.14)]">
                 <ZilaSignal variant={getSignalVariant(project.statusTone, project.id)} onDark className="h-5 w-5" />
               </span>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#DCE7FA]">Live project</p>
                 <h2 className="mt-1 text-[30px] font-semibold leading-none tracking-[-0.07em] text-white md:text-[36px]">{project.name}</h2>
               </div>
             </div>
-              <p className="mt-4 max-w-[600px] text-[19px] font-semibold leading-[1.24] tracking-[-0.045em] text-white">{project.stateSignal}</p>
+              <div className={`mt-4 max-w-[620px] rounded-[24px] border px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${confidence.panelClass}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className={`inline-flex items-center justify-center whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase leading-none tracking-[0.14em] ${confidence.toneClass}`}>
+                    {confidence.label}
+                  </span>
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap text-[11px] font-semibold text-[#D7E3F8]">
+                    <span className="zila-live-dot h-1.5 w-1.5 rounded-full bg-[#D9FF57]" />
+                    Updated now
+                  </span>
+                </div>
+                <p className="mt-3 text-[18px] font-semibold leading-[1.3] tracking-[-0.04em] text-white">{confidence.detail}</p>
+              </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {operationChips.map((item, index) => (
                   <span key={item} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${
@@ -288,7 +369,7 @@ function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Pr
           </div>
         </div>
 
-        <div className="mt-auto grid gap-4 pt-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(260px,0.74fr)] lg:items-end">
+        <div className="mt-auto grid gap-5 pt-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(260px,0.74fr)] lg:items-end">
           <div>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-x-8 gap-y-5">
               <MoneyMetric label="Budget" value={project.budget} dark />
@@ -309,7 +390,7 @@ function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Pr
               </div>
             </div>
 
-            <div className="mt-4 rounded-[18px] border border-[#67E8F9]/28 bg-[#071526]/68 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition group-hover:border-[#D9FF57]/20 group-hover:bg-[#071526]/78">
+            <div className="mt-5 rounded-[22px] border border-[#67E8F9]/22 bg-white/[0.075] px-4 py-4 shadow-[0_16px_34px_rgba(1,8,20,0.10),inset_0_1px_0_rgba(255,255,255,0.09)] transition group-hover:border-[#D9FF57]/18 group-hover:bg-white/[0.095]">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D9FAFF]">Next recommendation</p>
               <p className="mt-2 text-[15px] font-semibold leading-[1.35] tracking-[-0.025em] text-white">
                 {paymentSynced
@@ -317,7 +398,7 @@ function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Pr
                   : operations.recommendation}
               </p>
               <div className="mt-4 flex flex-wrap gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-                {["Open operational detail", "Review payouts", "View proof history"].map((action) => (
+                {actionLabels.map((action) => (
                   <span key={action} className="rounded-full border border-white/10 bg-white/[0.055] px-3 py-1.5 text-[11px] font-semibold text-[#D7E3F8]">
                     {action}
                   </span>
@@ -326,7 +407,7 @@ function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Pr
             </div>
           </div>
 
-          <div className="rounded-[20px] border border-white/12 bg-[#071526]/54 p-3 shadow-[0_20px_42px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-md">
+          <div className="rounded-[24px] border border-white/14 bg-white/[0.075] p-4 shadow-[0_20px_42px_rgba(31,68,116,0.12),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-md">
             <div className="mb-4 flex items-center justify-between gap-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#DCE7FA]">Activity snippet</p>
               <span className="text-[11px] font-semibold text-[#E8FCFF]">{project.updatedAt}</span>
@@ -346,7 +427,7 @@ function FeaturedProjectCard({ project, isActive, latestPayment }: { project: Pr
               <div className="relative flex gap-3">
                 <span className={`mt-1.5 inline-flex h-2.5 w-2.5 shrink-0 rounded-full ${
                   project.statusTone === "warning"
-                    ? "bg-[#B98B4A] shadow-[0_0_14px_rgba(185,139,74,0.24)]"
+                    ? "bg-[#D9FF57] shadow-[0_0_14px_rgba(217,255,87,0.22)]"
                     : "bg-[#67E8F9] shadow-[0_0_14px_rgba(103,232,249,0.24)]"
                 }`} />
                 <div>
@@ -385,18 +466,19 @@ function ProjectRailTile({
   const operations = getProjectOperations(project);
   const pressure = project.statusTone === "warning";
   const paymentSynced = paymentMatchesProject(latestPayment, project);
+  const confidence = getOperationalConfidence(project, paymentSynced, latestPayment);
 
   return (
     <button
       type="button"
       onClick={() => onSelect(project.id)}
       tabIndex={isDuplicate ? -1 : 0}
-      className={`group relative min-w-[270px] flex-1 overflow-hidden rounded-[22px] border p-3.5 text-left transition-all duration-500 hover:-translate-y-0.5 ${
+      className={`group relative min-w-[270px] flex-1 overflow-hidden rounded-[24px] border p-4 text-left transition-all duration-500 hover:-translate-y-0.5 ${
         isSelected
-          ? "border-[#D9FF57]/34 bg-[linear-gradient(180deg,rgba(217,255,87,0.11),rgba(7,21,38,0.74))] shadow-[0_20px_46px_rgba(217,255,87,0.08),0_0_30px_rgba(217,255,87,0.07),inset_0_1px_0_rgba(255,255,255,0.10)]"
+          ? "border-[#D9FF57]/28 bg-[linear-gradient(180deg,rgba(217,255,87,0.10),rgba(30,74,125,0.58))] shadow-[0_20px_46px_rgba(217,255,87,0.07),0_0_34px_rgba(103,232,249,0.06),inset_0_1px_0_rgba(255,255,255,0.12)]"
           : pressure
-            ? "border-[#B98B4A]/22 bg-[linear-gradient(180deg,rgba(185,139,74,0.10),rgba(7,21,38,0.64))] shadow-[0_18px_40px_rgba(185,139,74,0.05),inset_0_1px_0_rgba(255,255,255,0.08)]"
-            : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(7,21,38,0.52))] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]"
+            ? "border-[#D9FF57]/16 bg-[linear-gradient(180deg,rgba(217,255,87,0.07),rgba(30,74,125,0.44))] shadow-[0_18px_40px_rgba(31,68,116,0.10),inset_0_1px_0_rgba(255,255,255,0.09)]"
+            : "border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(30,74,125,0.38))] shadow-[0_14px_32px_rgba(31,68,116,0.10),inset_0_1px_0_rgba(255,255,255,0.09)]"
       }`}
       aria-pressed={isSelected}
     >
@@ -406,20 +488,20 @@ function ProjectRailTile({
         <div className="min-w-0">
           <p className="truncate text-[18px] font-semibold tracking-[-0.045em] text-white">{project.name}</p>
           <p className="mt-2 text-[13px] font-semibold leading-[1.45] text-[#D7E3F8]">
-            {paymentSynced ? "Payout synced to proof" : operations.runway}
+            {confidence.detail}
           </p>
         </div>
-        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${isSelected ? "border-[#D9FF57]/22 bg-[#D9FF57]/[0.10] text-[#EAFFB4]" : pressureClass(project.statusTone)}`}>
-          {paymentSynced ? "Synced" : isSelected ? "Focused" : pressure ? "Pressure" : "Stable"}
+        <span className={`inline-flex min-h-8 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-3 text-center text-[9px] font-semibold uppercase leading-none tracking-[0.11em] ${isSelected ? confidence.toneClass : pressureClass(project.statusTone)}`}>
+          {confidence.label}
         </span>
       </div>
 
       <div className="relative mt-4 flex items-start gap-3 rounded-[17px] border border-white/8 bg-white/[0.035] px-3 py-2.5">
         <span className={`${isSelected || pressure ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"} mt-1.5 h-2 w-2 shrink-0 rounded-full`} />
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8FA4C3]">Signal</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8FA4C3]">Operational signal</p>
           <p className="mt-1 text-[12px] font-semibold leading-[1.45] text-[#D7E3F8]">
-            {paymentSynced ? `${latestPayment?.amountLabel} proof generated` : pressure ? operations.payout : operations.reserve}
+            {paymentSynced ? `${latestPayment?.amountLabel} proof generated` : confidence.pressure}
           </p>
         </div>
       </div>
@@ -427,7 +509,7 @@ function ProjectRailTile({
       <div className="relative mt-4 flex items-center justify-between border-t border-white/10 pt-3">
         <p className="text-[11px] font-semibold text-[#D9FF57]">{project.remaining} remaining</p>
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#AFC0DD] transition group-hover:text-white">
-          Focus
+          {confidence.action}
           <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" strokeWidth={2} />
         </span>
       </div>
@@ -437,7 +519,7 @@ function ProjectRailTile({
 
 function pressureClass(tone: Project["statusTone"]) {
   if (tone === "warning") {
-    return "border-[#B98B4A]/32 bg-[#B98B4A]/12 text-[#F0C777]";
+    return "border-[#D9FF57]/18 bg-[#D9FF57]/[0.075] text-[#EAFFB4]";
   }
 
   if (tone === "success") {
@@ -461,8 +543,8 @@ function OperationalRail({
   const railProjects = projects.length > 0 ? projects : [];
 
   return (
-    <section className="relative overflow-hidden rounded-[30px] border border-white/8 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.09),transparent_32%),linear-gradient(180deg,rgba(7,21,38,0.34),rgba(7,17,31,0.58))] p-4 shadow-[0_24px_58px_rgba(6,16,31,0.15),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl md:p-4.5">
-      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.30),rgba(217,255,87,0.16),transparent)]" />
+    <section className="relative overflow-hidden rounded-[32px] border border-white/12 bg-[radial-gradient(circle_at_18%_0%,rgba(103,232,249,0.12),transparent_34%),linear-gradient(180deg,rgba(30,74,125,0.28),rgba(16,42,79,0.46))] p-5 shadow-[0_24px_58px_rgba(31,68,116,0.14),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl">
+      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.24),rgba(217,255,87,0.14),transparent)]" />
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#7EE7F6]">Operational rail</p>
@@ -474,8 +556,8 @@ function OperationalRail({
         </span>
       </div>
       <div className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-[linear-gradient(90deg,rgba(7,17,31,0.95),transparent)]" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-[linear-gradient(270deg,rgba(7,17,31,0.95),transparent)]" />
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-[linear-gradient(90deg,rgba(16,42,79,0.90),transparent)]" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-[linear-gradient(270deg,rgba(16,42,79,0.90),transparent)]" />
         <div className="zila-operational-rail-track flex w-max gap-4 pb-1">
           {[...railProjects, ...railProjects].map((project, index) => (
             <div key={`${project.id}-${index}`} aria-hidden={index >= railProjects.length ? "true" : undefined}>
@@ -533,18 +615,18 @@ function PortfolioIntelligencePanel({
   ];
 
   return (
-    <aside key={selectedProject.id} className="zila-flow-step relative overflow-hidden rounded-[30px] border border-white/9 bg-[radial-gradient(circle_at_100%_0%,rgba(217,255,87,0.08),transparent_28%),linear-gradient(180deg,rgba(4,9,22,0.68),rgba(9,22,42,0.52),rgba(7,17,31,0.70))] p-4 text-white shadow-[0_22px_54px_rgba(15,23,42,0.20),inset_0_1px_0_rgba(255,255,255,0.07)] backdrop-blur-xl xl:sticky xl:top-5">
-      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(217,255,87,0.28),transparent)]" />
+    <aside key={selectedProject.id} className="zila-flow-step relative overflow-hidden rounded-[32px] border border-white/14 bg-[radial-gradient(circle_at_100%_0%,rgba(217,255,87,0.07),transparent_30%),radial-gradient(circle_at_0%_18%,rgba(103,232,249,0.10),transparent_34%),linear-gradient(180deg,rgba(30,74,125,0.52),rgba(16,42,79,0.42),rgba(13,35,68,0.58))] p-5 text-white shadow-[0_24px_58px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl xl:sticky xl:top-5">
+      <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(217,255,87,0.22),transparent)]" />
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#D9FF57]">Coordination intelligence</p>
-          <h3 className="mt-3 text-[20px] font-semibold leading-[1.12] tracking-[-0.05em]">{selectedProject.name} is in focus.</h3>
+          <h3 className="mt-3 text-[21px] font-semibold leading-[1.14] tracking-[-0.05em]">{selectedProject.name} is in focus.</h3>
         </div>
         <span className="zila-live-dot mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#D9FF57] shadow-[0_0_16px_rgba(217,255,87,0.34)]" />
       </div>
 
-      <div className="mt-5 space-y-5">
-        <div className="space-y-4">
+      <div className="mt-6 space-y-6">
+        <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/[0.055] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
           {selectedInsights.map((insight, index) => (
             <div key={insight} className="flex gap-3">
               <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${index === 0 ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"}`} />
@@ -554,17 +636,17 @@ function PortfolioIntelligencePanel({
         </div>
 
         <Link
-          href="/payments"
-          className="group flex items-center justify-between gap-4 rounded-[22px] border border-[#D9FF57]/16 bg-[#D9FF57]/[0.07] px-4 py-3.5 transition hover:-translate-y-0.5 hover:bg-[#D9FF57]/[0.10] hover:shadow-[0_18px_36px_rgba(217,255,87,0.08)]"
+          href="/payments/send"
+          className="group flex items-center justify-between gap-4 rounded-[24px] border border-[#D9FF57]/16 bg-[#D9FF57]/[0.075] px-4 py-4 transition hover:-translate-y-0.5 hover:bg-[#D9FF57]/[0.10] hover:shadow-[0_18px_36px_rgba(217,255,87,0.08)]"
         >
           <span className="flex min-w-0 items-center gap-3">
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[15px] border border-[#D9FF57]/18 bg-[#D9FF57]/[0.09] text-[#EAFFB4]">
               <CreditCard className="h-[16px] w-[16px]" strokeWidth={2} />
             </span>
             <span className="min-w-0">
-              <span className="block text-[13px] font-semibold text-[#F1FFB8]">Coordinate payments</span>
+              <span className="block text-[13px] font-semibold text-[#F1FFB8]">Make payment</span>
               <span className="mt-1 block text-[12px] leading-[1.45] text-[#B9C8DF]">
-                {paymentSynced ? "Payment moved. Proof and project state are synced." : "Turn pressure into supplier payouts, reserves, and payment timing."}
+                {paymentSynced ? "Payment moved. Proof and project state are synced." : "Turn project pressure into a clear supplier payout."}
               </span>
             </span>
           </span>
@@ -574,20 +656,20 @@ function PortfolioIntelligencePanel({
         <div className="h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.16),transparent)]" />
 
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#F0C777]">Needs attention</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#D9FF57]">Recommended focus</p>
           <div className="mt-3 space-y-3">
             {(selectedProject.statusTone === "warning" ? [selectedProject, ...attentionProjects.filter((project) => project.id !== selectedProject.id)] : attentionProjects).slice(0, 2).map((project) => (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="group block rounded-[22px] border border-white/8 bg-white/[0.035] px-4 py-4 transition hover:-translate-y-0.5 hover:border-[#F0C777]/22 hover:bg-white/[0.055]"
+                className="group block rounded-[24px] border border-white/10 bg-white/[0.045] px-4 py-4 transition hover:-translate-y-0.5 hover:border-[#D9FF57]/18 hover:bg-white/[0.065]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[13px] font-semibold text-[#E9EEF9]">{project.name}</p>
                     <p className="mt-2 text-[15px] font-semibold leading-[1.35] tracking-[-0.025em] text-white">{project.nextMoveSummary}</p>
                   </div>
-                  <ArrowRight className="mt-1 h-[14px] w-[14px] shrink-0 text-[#F0C777] transition group-hover:translate-x-0.5 group-hover:text-white" />
+                  <ArrowRight className="mt-1 h-[14px] w-[14px] shrink-0 text-[#EAFFB4] transition group-hover:translate-x-0.5 group-hover:text-white" />
                 </div>
               </Link>
             ))}
@@ -608,7 +690,7 @@ function PortfolioIntelligencePanel({
                   item.tone === "positive"
                     ? "bg-[#67E8F9] shadow-[0_0_12px_rgba(103,232,249,0.24)]"
                     : item.tone === "negative"
-                      ? "bg-[#B98B4A] shadow-[0_0_12px_rgba(185,139,74,0.24)]"
+                      ? "bg-[#D9FF57] shadow-[0_0_12px_rgba(217,255,87,0.20)]"
                       : "bg-[#9FB7D6] shadow-[0_0_12px_rgba(159,183,214,0.16)]"
                 }`} />
                 {index < crossProjectFeed.length - 1 ? <span className="absolute left-[3.5px] top-6 h-[calc(100%-1rem)] w-px bg-white/12" /> : null}
@@ -616,8 +698,8 @@ function PortfolioIntelligencePanel({
                   <p className="text-[12px] leading-[1.55] text-[#D7E3F8]">
                     <span className="font-semibold text-white">{item.project}</span> {item.action.replace("updated", "recalculated").replace("recorded", "synchronized")}
                   </p>
-                  <p className={`mt-1 text-[11px] font-semibold ${item.tone === "positive" ? "text-[#D9FAFF]" : item.tone === "negative" ? "text-[#F0C777]" : "text-[#AFC0DD]"}`}>
-                    {item.impact} · {item.tone === "positive" ? "runway protected" : item.tone === "negative" ? "pressure detected" : "safe-to-use recalculated"}
+                  <p className={`mt-1 text-[11px] font-semibold ${item.tone === "positive" ? "text-[#D9FAFF]" : item.tone === "negative" ? "text-[#EAFFB4]" : "text-[#AFC0DD]"}`}>
+                    {item.impact} · {item.tone === "positive" ? "runway protected" : item.tone === "negative" ? "timing monitored" : "safe-to-use recalculated"}
                   </p>
                 </div>
               </div>
@@ -630,14 +712,16 @@ function PortfolioIntelligencePanel({
 }
 
 export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id ?? "");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0];
-  const attentionProjects = projects.filter((project) => project.statusTone === "warning").slice(0, 2);
-  const healthyCount = projects.filter((project) => project.statusTone === "success").length;
-  const pressureCount = projects.filter((project) => project.statusTone === "warning").length;
-  const moveReadyCount = projects.filter((project) => project.cashNeeded !== "$0").length;
-  const paymentProjectId = useMemo(() => getPaymentProjectId(latestPayment, projects), [latestPayment, projects]);
+  const [visibleProjects, setVisibleProjects] = useState(() => mergeOperationalProjects(projects));
+  const attentionProjects = visibleProjects.filter((project) => project.statusTone === "warning").slice(0, 2);
+  const healthyCount = visibleProjects.filter((project) => project.statusTone === "success").length;
+  const pressureCount = visibleProjects.filter((project) => project.statusTone === "warning").length;
+  const moveReadyCount = visibleProjects.filter((project) => project.cashNeeded !== "$0").length;
+  const paymentProjectId = useMemo(() => getPaymentProjectId(latestPayment, visibleProjects), [latestPayment, visibleProjects]);
+  const activeProjectId = selectedProjectId ?? paymentProjectId ?? visibleProjects[0]?.id ?? "";
+  const selectedProject = visibleProjects.find((project) => project.id === activeProjectId) ?? visibleProjects[0];
   const livePortfolioInsights = latestPayment
     ? [
         `${latestPayment.amountLabel} payout synced to ${latestPayment.projectName}.`,
@@ -654,20 +738,35 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
   }, []);
 
   useEffect(() => {
-    if (paymentProjectId) {
-      setSelectedProjectId(paymentProjectId);
-    }
-  }, [paymentProjectId]);
+    const update = () => setVisibleProjects(mergeOperationalProjects(projects));
+
+    update();
+    return subscribeToOperationalProjects(update);
+  }, [projects]);
 
   if (!selectedProject) {
-    return null;
+    return (
+      <div className="zila-unified-page relative -mx-4 -mt-2 overflow-hidden px-4 pb-[4.5rem] pt-4 md:-mx-5 md:rounded-[32px] md:px-5 md:pb-7 lg:-mx-6 lg:px-6">
+        <section className="relative overflow-hidden rounded-[30px] border border-white/16 bg-[linear-gradient(145deg,#214F83,#173D6D_55%,#102A4F)] p-6 text-white shadow-[0_26px_66px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.12)]">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#D9FF57]">Project focus</p>
+          <h1 className="mt-3 text-[32px] font-semibold tracking-[-0.06em]">No projects yet.</h1>
+          <p className="mt-2 max-w-xl text-[14px] leading-[1.7] text-[#C9D4F5]">
+            Create your first project to connect payments, reserves, proof, and operational activity in one live workspace.
+          </p>
+          <Link href="/onboarding" className="mt-5 inline-flex h-11 items-center justify-center rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#102A4F]">
+            Create project
+          </Link>
+        </section>
+      </div>
+    );
   }
 
   return (
-    <div className={`zila-unified-page relative -mx-4 -mt-2 space-y-4 overflow-hidden px-4 pb-[4.5rem] pt-3 before:pointer-events-none before:absolute before:inset-0 before:opacity-100 before:transition before:duration-700 md:-mx-5 md:rounded-[28px] md:px-5 md:pb-6 lg:-mx-6 lg:px-5 md:space-y-5 ${pageAtmosphereClass(selectedProject.statusTone)}`}>
-      <section className="zila-surface-grain zila-unified-panel relative overflow-hidden rounded-[24px] p-4 md:p-4.5">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(255,255,255,0.16),transparent_30%),radial-gradient(circle_at_72%_8%,rgba(103,232,249,0.18),transparent_34%),linear-gradient(100deg,rgba(33,79,131,0.20),rgba(23,61,109,0.14),rgba(255,255,255,0))]" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+    <div className={`zila-unified-page relative -mx-4 -mt-2 space-y-5 overflow-hidden px-4 pb-[4.5rem] pt-4 before:pointer-events-none before:absolute before:inset-0 before:opacity-100 before:transition before:duration-700 md:-mx-5 md:rounded-[32px] md:px-5 md:pb-7 lg:-mx-6 lg:px-6 md:space-y-6 ${pageAtmosphereClass(selectedProject.statusTone)}`}>
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.07),transparent_30%,rgba(7,17,31,0.08))]" />
+      <section className="zila-surface-grain zila-unified-panel relative overflow-hidden rounded-[28px] border border-white/16 p-5 shadow-[0_26px_66px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(255,255,255,0.12)] md:p-5">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(255,255,255,0.18),transparent_32%),radial-gradient(circle_at_72%_8%,rgba(103,232,249,0.16),transparent_36%),linear-gradient(100deg,rgba(75,118,159,0.22),rgba(23,61,109,0.12),rgba(255,255,255,0.04))]" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-3">
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-[#67E8F9]/24 bg-[linear-gradient(135deg,#10233F,#1D4ED8_58%,#0EA5E9)] shadow-[0_18px_34px_rgba(16,35,63,0.22),0_0_20px_rgba(103,232,249,0.16),inset_0_1px_0_rgba(255,255,255,0.16)]">
@@ -682,11 +781,11 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
               </p>
               </div>
             </div>
-            <h1 className="mt-3 text-[30px] font-semibold leading-none tracking-[-0.07em] text-white md:text-[34px]">Projects in motion</h1>
-            <p className="mt-2.5 max-w-[700px] text-[13px] font-medium leading-[1.6] text-[#E0EAF8]">
-              Live coordination across reserves, supplier timing, proof records, and project runway.
+            <h1 className="mt-4 text-[34px] font-semibold leading-none tracking-[-0.07em] text-white md:text-[40px]">Projects in motion</h1>
+            <p className="mt-3 max-w-[720px] text-[14px] font-medium leading-[1.7] text-[#E0EAF8]">
+              Real-time operational intelligence across reserves, supplier timing, proof records, and project runway.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {livePortfolioInsights.slice(0, 3).map((insight, index) => (
                 <span key={insight} className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] font-semibold ${index === 0 ? "border-[#D9FF57]/18 bg-[#D9FF57]/[0.075] text-[#EAFFB4]" : "border-white/10 bg-white/[0.055] text-[#D7E3F8]"}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${index === 0 ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"}`} />
@@ -695,7 +794,7 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
               ))}
             </div>
           </div>
-          <div className="rounded-[22px] border border-white/14 bg-[#071526]/34 px-3.5 py-3 shadow-[0_18px_36px_rgba(1,8,20,0.18),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl">
+          <div className="rounded-[24px] border border-white/16 bg-white/[0.075] px-4 py-4 shadow-[0_18px_36px_rgba(31,68,116,0.12),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl">
             <div className="flex items-center justify-between gap-5">
               <LivePulse label="Portfolio live" />
               <p className="text-[12px] font-semibold text-[#E0EAF8]">{latestPayment ? "Synced just now" : "7 updates today"}</p>
@@ -716,7 +815,7 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
         </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_286px] xl:items-start">
+      <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px] xl:items-start">
         <div>
           <section className="relative">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-4 px-1">
@@ -724,7 +823,7 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7EE7F6]">Primary operating focus</p>
                 <p className="mt-1 text-[15px] font-semibold text-[#E0EAF8]">Selected from the live project rail below.</p>
               </div>
-              <LivePulse label="Recalculating" />
+              <LivePulse label="Coordinating" />
             </div>
             <div key={selectedProject.id} className="zila-flow-step">
               <FeaturedProjectCard project={selectedProject} isActive latestPayment={latestPayment} />
@@ -735,7 +834,7 @@ export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
         <PortfolioIntelligencePanel selectedProject={selectedProject} attentionProjects={attentionProjects} latestPayment={latestPayment} />
       </div>
 
-      <OperationalRail projects={projects} selectedProjectId={selectedProject.id} onSelectProject={setSelectedProjectId} latestPayment={latestPayment} />
+      <OperationalRail projects={visibleProjects} selectedProjectId={selectedProject.id} onSelectProject={setSelectedProjectId} latestPayment={latestPayment} />
     </div>
   );
 }

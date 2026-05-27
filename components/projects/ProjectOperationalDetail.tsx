@@ -23,7 +23,8 @@ import {
 
 import { MockInvoiceUpload } from "@/components/documents/MockInvoiceUpload";
 import { AppShell } from "@/components/ui/AppShell";
-import type { Project } from "@/data/projects";
+import { getProjects, type Project } from "@/data/projects";
+import { getOperationalProjectById } from "@/lib/projectStore";
 
 type ProjectType =
   | "Residency"
@@ -101,10 +102,10 @@ const residencyVaults: ProjectVault[] = [
       { label: "Route", value: "Nairobi → Perth" },
       { label: "Estimated flight cost", value: "$1,850" },
       { label: "Booked cost", value: "$1,720" },
-      { label: "Payment status", value: "Proof pending" },
+      { label: "Payment status", value: "Record attaches after payout" },
     ],
     suppliers: ["Skyline Travel"],
-    participants: ["Sarah", "Amara"],
+    participants: ["Sarah", "Kevin"],
     notes: ["Add participant flight for Sarah when dates are confirmed."],
   },
   {
@@ -119,7 +120,7 @@ const residencyVaults: ProjectVault[] = [
       { label: "Stay", value: "Two villas" },
       { label: "Estimated cost", value: "$9,200" },
       { label: "Booked cost", value: "$6,600 committed" },
-      { label: "Proof status", value: "Deposit verified" },
+      { label: "Record status", value: "Deposit verified" },
     ],
     suppliers: ["North Beach Villas"],
     participants: ["Residency cohort"],
@@ -168,7 +169,7 @@ const residencyVaults: ProjectVault[] = [
     upcomingPayout: "Workshop venue · Thursday",
     details: [
       { label: "Experience", value: "Welcome dinner and field visits" },
-      { label: "Proof status", value: "Record ready" },
+      { label: "Record status", value: "Ready" },
     ],
     suppliers: ["Workshop venue"],
     participants: ["Residency cohort"],
@@ -200,7 +201,7 @@ const residencyVaults: ProjectVault[] = [
     upcomingPayout: "Two vendor payouts · tomorrow",
     details: [
       { label: "Vendors", value: "Venue, AV, catering" },
-      { label: "Proof status", value: "Auto attach on payout" },
+      { label: "Record status", value: "Auto attach on payout" },
     ],
     suppliers: ["Venue", "AV partner"],
     participants: [],
@@ -287,7 +288,7 @@ const constructionVaults: ProjectVault[] = [
     upcomingPayout: "Lift hire · next week",
     details: [
       { label: "Equipment", value: "Lift and temporary power" },
-      { label: "Proof status", value: "Invoice requested" },
+      { label: "Record status", value: "Invoice requested" },
     ],
     suppliers: ["Hire partner"],
     participants: [],
@@ -399,7 +400,7 @@ function makeGenericVaults(project: Project): ProjectVault[] {
       ],
       suppliers: ["Delivery partner"],
       participants: [project.owner],
-      notes: ["Core delivery remains connected to proof history."],
+      notes: ["Core delivery remains connected to operational history."],
     },
     {
       id: "suppliers",
@@ -411,7 +412,7 @@ function makeGenericVaults(project: Project): ProjectVault[] {
       upcomingPayout: "Supplier check · tomorrow",
       details: [
         { label: "Supplier", value: "Primary vendor" },
-        { label: "Proof status", value: "Ready" },
+        { label: "Record status", value: "Ready" },
       ],
       suppliers: ["Primary vendor"],
       participants: [],
@@ -538,7 +539,7 @@ function getPayoutSchedule(vault: ProjectVault) {
 
   return [
     { label: vault.upcomingPayout, detail: supplier, state: vault.pressure === "Pressure" ? "Review" : "Ready" },
-    { label: "Proof sync", detail: "Operational record attaches after payout", state: "Prepared" },
+    { label: "Record sync", detail: "Operational proof attaches automatically after settlement", state: "Prepared" },
   ];
 }
 
@@ -546,7 +547,7 @@ function getProofRecords(vault: ProjectVault) {
   return [
     `${vault.name} allocation verified`,
     `${getVaultReserveImpact(vault)}`,
-    "Payout reason linked to project",
+    "Settlement context linked to project memory",
   ];
 }
 
@@ -568,11 +569,12 @@ function cloneVaults(vaults: ProjectVault[]) {
   }));
 }
 
-export function ProjectOperationalDetail({ project }: { project: Project }) {
-  const initialProjectDetails = getInitialProjectDetails(project);
+export function ProjectOperationalDetail({ project, requestedProjectId }: { project: Project; requestedProjectId?: string }) {
+  const activeProject = requestedProjectId ? getOperationalProjectById(getProjects(), requestedProjectId) ?? project : project;
+  const initialProjectDetails = getInitialProjectDetails(activeProject);
   const [projectDetails, setProjectDetails] = useState<ProjectDetailState>(initialProjectDetails);
   const [projectType, setProjectType] = useState<ProjectType>(initialProjectDetails.type);
-  const [vaults, setVaults] = useState<ProjectVault[]>(() => cloneVaults(getVaultDefaults(initialProjectDetails.type, project)));
+  const [vaults, setVaults] = useState<ProjectVault[]>(() => cloneVaults(getVaultDefaults(initialProjectDetails.type, activeProject)));
   const [expandedVaultId, setExpandedVaultId] = useState(vaults[0]?.id ?? "");
   const [actionModal, setActionModal] = useState<ActionModal>(null);
   const [newVaultName, setNewVaultName] = useState("");
@@ -587,7 +589,7 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
     `${initialProjectDetails.name} operating range active`,
     `${initialProjectDetails.type} vault structure ready`,
     "Reserve threshold protected",
-    "Proof history ready",
+    "Operational history ready",
   ]);
   const [projectArchived, setProjectArchived] = useState(false);
   const [recalculationKey, setRecalculationKey] = useState(0);
@@ -730,17 +732,15 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
     const reserveVault = activeVaults.find((vault) => vault.name.toLowerCase().includes("reserve"))?.name ?? "Operations Reserve";
     const payoutVault = activeVaults.find((vault) => vault.suppliers.length > 0 || vault.name.toLowerCase().includes("payout")) ?? activeVaults[0];
     const supplier = payoutVault?.suppliers[0] ?? "primary supplier";
-    const participantVault = activeVaults.find((vault) => vault.participants.length > 0) ?? activeVaults[0];
-    const participant = participantVault?.participants[0] ?? projectDetails.owner;
 
     return [
-      `Add $300 to ${firstVault} for ${projectDetails.name}.`,
-      `Move $500 from ${reserveVault} into ${firstVault}.`,
-      `Increase ${payoutVault?.name ?? firstVault} allocation for Friday.`,
-      `Add supplier payout for ${supplier}.`,
-      `Add participant cost for ${participant}.`,
+      `Delivery reserve may tighten after the next ${payoutVault?.name ?? firstVault} payout.`,
+      `${supplier} timing could reduce runway if settlement slips.`,
+      `${reserveVault} protection remains healthy after current commitments.`,
+      `${firstVault} has room for one additional operational update.`,
+      `Operational history will sync automatically after settlement.`,
     ];
-  }, [activeVaults, projectDetails.name, projectDetails.owner]);
+  }, [activeVaults]);
 
   const applyModalAction = () => {
     if (!actionModal || !("vaultId" in actionModal) || !selectedVault) {
@@ -783,8 +783,8 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
     }
 
     if (actionModal.kind === "attach-proof" && value) {
-      addDetail(selectedVault.id, "Proof record", value);
-      addTimelineEntry(`Proof attached to ${selectedVault.name}`);
+      addDetail(selectedVault.id, "Operational record", value);
+      addTimelineEntry(`Operational record attached to ${selectedVault.name}`);
     }
 
     if (actionModal.kind === "move-money" && Number.isFinite(amount) && amount > 0) {
@@ -819,9 +819,9 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
 
           <section className="mt-3 rounded-[26px] border border-white/12 bg-white/[0.065] p-4 shadow-[0_24px_58px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl md:p-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="max-w-[680px]">
+              <div className="min-w-0 max-w-[680px]">
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-[32px] font-semibold leading-none tracking-[-0.06em] md:text-[38px]">{projectDetails.name}</h1>
+                  <h1 className="min-w-0 break-words text-[32px] font-semibold leading-none tracking-[-0.06em] md:text-[38px]">{projectDetails.name}</h1>
                   {projectArchived ? (
                     <span className="rounded-full border border-white/12 bg-white/[0.055] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">Archived</span>
                   ) : null}
@@ -847,14 +847,14 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                   </button>
                 </div>
               </div>
-              <div key={`health-${recalculationKey}`} className="zila-recalc-pulse min-w-[230px] rounded-[22px] border border-[#D9FF57]/16 bg-[#D9FF57]/[0.07] p-3 shadow-[0_18px_44px_rgba(217,255,87,0.05),inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <div key={`health-${recalculationKey}`} className="zila-recalc-pulse w-full min-w-0 rounded-[22px] border border-[#D9FF57]/16 bg-[#D9FF57]/[0.07] p-3 shadow-[0_18px_44px_rgba(217,255,87,0.05),inset_0_1px_0_rgba(255,255,255,0.08)] sm:w-auto sm:min-w-[230px]">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#EAFFB4]">Operational health</p>
-                <p className="mt-2 text-[19px] font-semibold tracking-[-0.045em]">{projectPressureState === "Watch" ? `${pressureCount} vaults need attention` : "Reserve threshold healthy"}</p>
+                <p className="mt-2 break-words text-[19px] font-semibold tracking-[-0.045em]">{projectPressureState === "Watch" ? `${pressureCount} vaults need attention` : "Reserve threshold healthy"}</p>
                 <p className="mt-2 text-[12px] leading-[1.55] text-[#D7E3F8]">Reserve protected: {currency(reserveTotal)}</p>
               </div>
             </div>
 
-            <div className="mt-4 grid gap-2.5 md:grid-cols-4">
+            <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
               {[
                 ["Allocated", currency(totals.allocated)],
                 ["Spent", currency(totals.spent)],
@@ -869,20 +869,20 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[#071526]/34 p-2.5">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="px-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#AFC0FF]">Project type</span>
                 <select
                   value={projectType}
                   onChange={(event) => resetDefaults(event.target.value as ProjectType)}
-                  className="h-11 rounded-[15px] border border-white/12 bg-[#102A4F] px-3 text-[13px] font-semibold text-white outline-none transition focus:border-[#D9FF57]/34"
+                  className="h-11 max-w-full rounded-[15px] border border-white/12 bg-[#102A4F] px-3 text-[13px] font-semibold text-white outline-none transition focus:border-[#D9FF57]/34"
                 >
                   {projectTypes.map((type) => (
                     <option key={type}>{type}</option>
                   ))}
                 </select>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Link href={`/ask?project=${project.id}`} className="inline-flex h-11 items-center justify-center rounded-full border border-[#D9FF57]/18 bg-[#D9FF57]/[0.08] px-4 text-[13px] font-semibold text-[#F1FFB8] transition hover:bg-[#D9FF57]/[0.12]">
+              <div className="flex min-w-0 flex-wrap gap-2">
+                <Link href={`/ask?project=${activeProject.id}`} className="inline-flex h-11 items-center justify-center rounded-full border border-[#D9FF57]/18 bg-[#D9FF57]/[0.08] px-4 text-[13px] font-semibold text-[#F1FFB8] transition hover:bg-[#D9FF57]/[0.12]">
                   Add update with Zila
                 </Link>
                 <MockInvoiceUpload assignedProject={projectDetails.name} buttonLabel="Upload invoice" tone="dark" inlineInFlexRow buttonClassName="!h-11 !rounded-full !border-white/12 !bg-white/[0.06] !text-[#D7E3F8]" />
@@ -957,8 +957,8 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                       </div>
 
                       {isExpanded ? (
-                        <div className="zila-vault-expand border-t border-white/10 px-4 pb-5 pt-4 md:px-5">
-                          <div className="mb-5 grid gap-3 md:grid-cols-[1.15fr_0.85fr_0.85fr_1fr]">
+                        <div className="zila-readable-text zila-vault-expand border-t border-white/10 px-4 pb-5 pt-4 md:px-5">
+                          <div className="mb-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-[1.15fr_0.85fr_0.85fr_1fr]">
                             <div className="rounded-[22px] border border-[#D9FF57]/16 bg-[#D9FF57]/[0.07] p-4">
                               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#EAFFB4]">Remaining</p>
                               <p key={`${vault.id}-expanded-remaining-${vaultRemaining}`} className="zila-number-shift mt-2 text-[30px] font-semibold tracking-[-0.06em] text-[#F1FFB8]">{currency(vaultRemaining)}</p>
@@ -979,19 +979,36 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                             </div>
                           </div>
 
-                          <div className="mb-5 grid gap-3 md:grid-cols-3">
-                            {[getVaultSignal(vault), getVaultReserveImpact(vault), vault.pressure === "Pressure" ? "Action needed before payout" : "Proof sync prepared"].map((signal, index) => (
-                              <div key={signal} className={`rounded-[18px] border p-3 ${index === 0 ? "border-[#D9FF57]/14 bg-[#D9FF57]/[0.055]" : "border-white/8 bg-[#071526]/30"}`}>
-                                <div className="flex items-center gap-2">
-                                  <span className={`h-2 w-2 rounded-full ${index === 0 ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"}`} />
-                                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">{index === 0 ? "Operational signal" : index === 1 ? "Reserve impact" : "Proof state"}</p>
-                                </div>
-                                <p className="mt-2 text-[13px] font-semibold leading-[1.45] text-[#EAF4FF]">{signal}</p>
+                          <div className="mb-5 rounded-[22px] border border-[#D9FF57]/14 bg-[radial-gradient(circle_at_0%_0%,rgba(217,255,87,0.08),transparent_30%),rgba(7,21,38,0.32)] p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D9FF57]">Operational Status</p>
+                                <p className="mt-2 break-words text-[16px] font-semibold leading-[1.4] text-white">{getVaultSignal(vault)}</p>
                               </div>
-                            ))}
+                              <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#D9FF57]/14 bg-[#D9FF57]/[0.07] px-3 py-1.5 text-[11px] font-semibold text-[#EAFFB4]">
+                                <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2} />
+                                Settlement verified
+                              </span>
+                            </div>
+                            <div className="mt-4 grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+                              {[
+                                ["Action", vault.upcomingPayout],
+                                ["Impact", vault.pressure === "Pressure" ? "Review before release" : "Ready for coordination"],
+                                ["Reserve", getVaultReserveImpact(vault)],
+                                ["Memory", "Operational record synced"],
+                              ].map(([label, value], index) => (
+                                <div key={label} className="min-w-0 rounded-[16px] border border-white/8 bg-white/[0.045] p-3">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`h-1.5 w-1.5 rounded-full ${index === 0 ? "zila-live-dot bg-[#D9FF57]" : "bg-[#67E8F9]/70"}`} />
+                                    <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#AFC0DD]">{label}</p>
+                                  </div>
+                                  <p className="mt-2 break-words text-[12px] font-semibold leading-[1.45] text-[#EAF4FF]">{value}</p>
+                                </div>
+                              ))}
+                            </div>
                           </div>
 
-                          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+                          <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
                             <div className="space-y-4">
                               <div>
                                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -1000,7 +1017,7 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                                     Add detail
                                   </button>
                                 </div>
-                                <div className="grid gap-3 md:grid-cols-2">
+                                <div className="grid gap-3 lg:grid-cols-2">
                               {vault.details.map((detail) => (
                                 <div key={`${detail.label}-${detail.value}`} className="rounded-[18px] border border-white/8 bg-[#071526]/32 p-3">
                                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8FA4C3]">{detail.label}</p>
@@ -1010,9 +1027,9 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                                 </div>
                               </div>
 
-                              <div className="grid gap-3 md:grid-cols-2">
+                              <div className="grid gap-3 lg:grid-cols-2">
                                 <section className="rounded-[20px] border border-white/8 bg-[#071526]/30 p-4">
-                                  <div className="flex items-center justify-between gap-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
                                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#AFC0DD]">Payout schedule</p>
                                     <button type="button" onClick={() => openItemModal({ kind: "add-payout", vaultId: vault.id })} className="rounded-full border border-[#D9FF57]/14 bg-[#D9FF57]/[0.07] px-3 py-1.5 text-[11px] font-semibold text-[#EAFFB4]">Add payout</button>
                                   </div>
@@ -1030,15 +1047,15 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                                 </section>
 
                                 <section className="rounded-[20px] border border-white/8 bg-[#071526]/30 p-4">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#AFC0DD]">Proof records</p>
-                                    <button type="button" onClick={() => openItemModal({ kind: "attach-proof", vaultId: vault.id })} className="rounded-full border border-[#D9FF57]/14 bg-[#D9FF57]/[0.07] px-3 py-1.5 text-[11px] font-semibold text-[#EAFFB4]">Attach proof</button>
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#AFC0DD]">Operational record</p>
+                                    <button type="button" onClick={() => setActionModal({ kind: "proof-history", vaultId: vault.id })} className="rounded-full border border-[#D9FF57]/14 bg-[#D9FF57]/[0.07] px-3 py-1.5 text-[11px] font-semibold text-[#EAFFB4]">View record</button>
                                   </div>
                                   <div className="mt-3 space-y-2">
                                     {getProofRecords(vault).map((record) => (
                                       <div key={record} className="flex gap-2 rounded-[15px] border border-[#D9FF57]/10 bg-[#D9FF57]/[0.045] p-3">
                                         <BadgeCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#D9FF57]" strokeWidth={2} />
-                                        <p className="text-[12px] font-semibold leading-[1.45] text-[#D7E3F8]">{record}</p>
+                                        <p className="break-words text-[12px] font-semibold leading-[1.45] text-[#D7E3F8]">{record}</p>
                                       </div>
                                     ))}
                                   </div>
@@ -1047,7 +1064,7 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
 
                               <section className="rounded-[20px] border border-white/8 bg-[#071526]/30 p-4">
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#AFC0DD]">Recent activity</p>
-                                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                                <div className="mt-3 grid gap-2 lg:grid-cols-3">
                                   {getRecentActivity(vault).map((activity) => (
                                     <div key={activity} className="rounded-[15px] border border-white/8 bg-white/[0.04] p-3">
                                       <p className="text-[12px] font-semibold leading-[1.45] text-[#D7E3F8]">{activity}</p>
@@ -1112,7 +1129,7 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                             </div>
                           </div>
 
-                          <div className="mt-4 grid gap-3 md:grid-cols-3">
+                          <div className="mt-4 grid gap-3 xl:grid-cols-3">
                             <OperationalList title="Suppliers" icon={<ReceiptText className="h-4 w-4" />} items={vault.suppliers} onAdd={() => openItemModal({ kind: "add-supplier", vaultId: vault.id })} />
                             <OperationalList title="Participants" icon={<Users className="h-4 w-4" />} items={vault.participants} onAdd={() => openItemModal({ kind: "add-participant", vaultId: vault.id })} />
                             <OperationalList title="Notes" icon={<FileText className="h-4 w-4" />} items={vault.notes} onAdd={() => openItemModal({ kind: "add-note", vaultId: vault.id })} />
@@ -1134,10 +1151,10 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                               </button>
                               <button type="button" onClick={() => setActionModal({ kind: "proof-history", vaultId: vault.id })} className="inline-flex h-10 items-center gap-2 rounded-[13px] border border-white/10 bg-white/[0.055] px-3 text-[12px] font-semibold text-[#D7E3F8] transition hover:border-[#D9FF57]/18 hover:text-white">
                                 <BadgeCheck className="h-3.5 w-3.5" />
-                                Proof history
+                                Operational history
                               </button>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                               <button type="button" onClick={() => archiveVault(vault.id)} className="inline-flex h-10 items-center gap-2 rounded-[13px] border border-white/10 bg-white/[0.055] px-3 text-[12px] font-semibold text-[#AFC0DD] transition hover:text-white">
                                 <Archive className="h-3.5 w-3.5" />
                                 Archive
@@ -1158,11 +1175,11 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
 
             <aside className="space-y-4">
               <section className="rounded-[28px] border border-[#D9FF57]/16 bg-[linear-gradient(180deg,rgba(217,255,87,0.08),rgba(7,21,38,0.44))] p-5 shadow-[0_22px_54px_rgba(217,255,87,0.05),inset_0_1px_0_rgba(255,255,255,0.08)]">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D9FF57]">Ask Zila can update this</p>
-                <p className="mt-3 text-[22px] font-semibold tracking-[-0.045em]">Operational updates become structure.</p>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D9FF57]">Ask Zila intelligence</p>
+                <p className="mt-3 text-[22px] font-semibold tracking-[-0.045em]">Context-aware operating signals.</p>
                 <div className="mt-4 space-y-2">
                   {operationalSuggestions.map((example) => (
-                    <Link key={example} href={`/ask?project=${project.id}`} className="block rounded-[16px] border border-white/8 bg-[#071526]/34 px-3 py-2 text-[12px] font-semibold text-[#D7E3F8] transition hover:border-[#D9FF57]/16 hover:bg-[#D9FF57]/[0.055] hover:text-white">
+                    <Link key={example} href={`/ask?project=${activeProject.id}`} className="block break-words rounded-[16px] border border-white/8 bg-[#071526]/34 px-3 py-2 text-[12px] font-semibold leading-[1.45] text-[#D7E3F8] transition hover:border-[#D9FF57]/16 hover:bg-[#D9FF57]/[0.055] hover:text-white">
                       {example}
                     </Link>
                   ))}
@@ -1180,10 +1197,10 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                   </div>
                 </div>
                 <p className="mt-4 text-[13px] leading-[1.7] text-[#D7E3F8]">
-                  Forward operational updates from WhatsApp and Zila will structure them into project costs, payouts, reserves, and proof history.
+                  Forward operational updates from WhatsApp and Zila will structure them into project costs, payouts, reserves, and operational history.
                 </p>
                 <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-                  {["WhatsApp message", "Vault updates", "Reserve recalculates", "Proof record saved"].map((step, index) => (
+                  {["Action captured", "Operational impact calculated", "Reserve recalculates", "Record attached automatically", "Memory synced"].map((step, index) => (
                     <div key={step} className="flex items-center gap-3">
                       <span className={`h-2 w-2 rounded-full ${index === 0 ? "bg-[#D9FF57] shadow-[0_0_12px_rgba(217,255,87,0.28)]" : "bg-[#67E8F9]/60"}`} />
                       <p className="text-[12px] font-semibold text-[#D7E3F8]">{step}</p>
@@ -1300,7 +1317,7 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                 </button>
 
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-5">
-                  <p className="max-w-[280px] text-[12px] leading-[1.55] text-[#AFC0DD]">Zila will include this vault in allocation, reserve, payout, and proof calculations immediately.</p>
+                  <p className="max-w-[280px] text-[12px] leading-[1.55] text-[#AFC0DD]">Zila will include this vault in allocation, reserve, payout, and operational record calculations immediately.</p>
                   <button
                     type="button"
                     onClick={addVault}
@@ -1417,7 +1434,7 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                       : actionModal.kind === "add-payout"
                         ? "Add payout"
                         : actionModal.kind === "attach-proof"
-                          ? "Attach proof"
+                          ? "Link operational record"
                       : actionModal.kind === "add-subcategory"
                         ? "Add subcategory"
                         : actionModal.kind === "add-note"
@@ -1431,7 +1448,7 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
                 {actionModal.kind !== "move-money" ? (
                   <label className="mt-5 grid gap-2">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#AFC0DD]">
-                      {actionModal.kind === "add-payout" ? "Payout label" : actionModal.kind === "attach-proof" ? "Proof reference" : "Details"}
+                      {actionModal.kind === "add-payout" ? "Payout label" : actionModal.kind === "attach-proof" ? "Record reference" : "Details"}
                     </span>
                     <input value={modalValue} onChange={(event) => setModalValue(event.target.value)} className="h-12 rounded-[16px] border border-white/10 bg-white/[0.06] px-4 text-[14px] text-white outline-none focus:border-[#D9FF57]/30" />
                   </label>
@@ -1454,17 +1471,17 @@ export function ProjectOperationalDetail({ project }: { project: Project }) {
           {actionModal && "vaultId" in actionModal && selectedVault && actionModal.kind === "proof-history" ? (
             <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#020817]/68 px-4 py-5 backdrop-blur-md md:items-center">
               <div className="zila-flow-step w-full max-w-[520px] rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,#183B6A,#10233F_52%,#071526)] p-5 text-white shadow-[0_34px_90px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.12)] md:p-6">
-                <ModalTitle eyebrow={selectedVault.name} title="Proof history" onClose={() => setActionModal(null)} />
+                <ModalTitle eyebrow={selectedVault.name} title="Operational history" onClose={() => setActionModal(null)} />
                 <div className="mt-5 space-y-3">
-                  {["Vault allocation verified", "Reserve status synced", "Upcoming payout linked", "Operational record ready"].map((item) => (
+                  {["Vault allocation verified", "Reserve status synced", "Upcoming payout linked", "Proof attached automatically", "Operational memory synced"].map((item) => (
                     <div key={item} className="flex items-center gap-3 rounded-[16px] border border-[#D9FF57]/12 bg-[#D9FF57]/[0.055] px-4 py-3">
                       <BadgeCheck className="h-4 w-4 shrink-0 text-[#D9FF57]" strokeWidth={2} />
-                      <p className="text-[13px] font-semibold text-[#D7E3F8]">{item}</p>
+                      <p className="break-words text-[13px] font-semibold text-[#D7E3F8]">{item}</p>
                     </div>
                   ))}
                 </div>
                 <Link href="/proof" className="mt-5 inline-flex h-12 items-center rounded-full border border-[#D9FF57]/20 bg-[#D9FF57]/[0.08] px-5 text-[13px] font-semibold text-[#F1FFB8]">
-                  Open Proof
+                  View operational record
                 </Link>
               </div>
             </div>

@@ -20,7 +20,7 @@ export default function BankTransferComingSoonPage() {
         <div className="relative space-y-6">
           <FlowBackNav
             items={[
-              { label: "Payment Methods", href: "/payments/choose-method", primary: true },
+              { label: "Payment Methods", href: "/payments/send", primary: true },
               { label: "Payments", href: "/payments" },
               { label: "Dashboard", href: "/home" },
             ]}

@@ -7,7 +7,7 @@ interface GreetingSectionProps {
 export function GreetingSection({
   dateLabel = "Monday, 23 March",
   greeting = "Good morning,",
-  name = "Amara",
+  name = "Kevin",
 }: GreetingSectionProps) {
   return (
     <>

@@ -13,6 +13,8 @@ import {
   ClipboardCheck,
   CreditCard,
   FolderKanban,
+  Home,
+  Settings,
   ShieldCheck,
   Sun,
 } from "lucide-react";
@@ -40,6 +42,12 @@ interface DesktopNavItem {
 
 const desktopNavItems: DesktopNavItem[] = [
   {
+    label: "Home",
+    href: "/home",
+    icon: Home,
+    description: "Operational overview",
+  },
+  {
     label: "Projects",
     href: "/projects",
     icon: FolderKanban,
@@ -68,11 +76,23 @@ const desktopNavItems: DesktopNavItem[] = [
     href: "/ask",
     icon: BarChart3,
     description: "Operating context",
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+    description: "Workspace setup",
   },
 ];
 
 const homeNavItems: DesktopNavItem[] = [
   {
+    label: "Home",
+    href: "/home",
+    icon: Home,
+    description: "Operational overview",
+  },
+  {
     label: "Projects",
     href: "/projects",
     icon: FolderKanban,
@@ -101,6 +121,12 @@ const homeNavItems: DesktopNavItem[] = [
     href: "/ask",
     icon: BarChart3,
     description: "Operating context",
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+    description: "Workspace setup",
   },
 ];
 
@@ -134,6 +160,11 @@ const pageMeta: Record<string, { title: string; eyebrow: string; summary: string
     title: "Preferences",
     eyebrow: "Profile",
     summary: "Manage your account context, currency defaults, and personal settings.",
+  },
+  "/settings": {
+    title: "Settings",
+    eyebrow: "Workspace",
+    summary: "Manage your workspace, wallet, payment preferences, and operational setup.",
   },
   "/compare": {
     title: "Operating patterns",
@@ -175,7 +206,7 @@ function getPrimaryFlowAction(pathname: string) {
   if (pathname === "/projects" || pathname.startsWith("/projects/")) {
     return {
       href: "/payments",
-      label: "Coordinate Payments",
+      label: "Make Payment",
       description: "Project pressure becomes payout action",
     };
   }
@@ -204,9 +235,17 @@ function getPrimaryFlowAction(pathname: string) {
     };
   }
 
+  if (pathname === "/settings") {
+    return {
+      href: "/home",
+      label: "Back to Dashboard",
+      description: "Return to operational state",
+    };
+  }
+
   return {
     href: "/payments",
-    label: "Coordinate Payments",
+    label: "Make Payment",
     description: "Keep obligations moving",
   };
 }
@@ -262,7 +301,7 @@ export function DesktopShell({ children }: DesktopShellProps) {
 
   return (
     <div
-      className={`zila-page-grain hidden min-h-screen w-full md:block ${
+      className={`zila-page-grain hidden min-h-screen w-full lg:block ${
         isHome
           ? "bg-[radial-gradient(ellipse_at_18%_0%,rgba(255,255,255,0.72),transparent_32%),radial-gradient(ellipse_at_86%_7%,rgba(103,232,249,0.24),transparent_28%),radial-gradient(ellipse_at_54%_88%,rgba(109,94,248,0.10),transparent_36%),linear-gradient(180deg,#DCEEFF_0%,#C6DDF8_48%,#AFCBEF_100%)]"
           : "bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.48),transparent_28%),radial-gradient(ellipse_at_top_right,rgba(103,232,249,0.20),transparent_26%),linear-gradient(180deg,#DCEEFF_0%,#C8DDF6_54%,#B7D0F0_100%)]"
@@ -272,14 +311,14 @@ export function DesktopShell({ children }: DesktopShellProps) {
         <aside
           className={`zila-sidebar-scroll sticky top-3 flex h-[calc(100vh-1.5rem)] min-h-0 flex-col overflow-y-auto overscroll-contain rounded-[20px] border px-3 py-3 backdrop-blur-xl ${
             isHome
-              ? "border-white/24 bg-[radial-gradient(circle_at_18%_0%,rgba(246,245,241,0.12),transparent_32%),radial-gradient(circle_at_105%_18%,rgba(107,184,255,0.09),transparent_30%),linear-gradient(180deg,rgba(33,61,96,0.62),rgba(22,44,74,0.68)_58%,rgba(13,30,56,0.76))] shadow-[0_24px_58px_rgba(31,68,116,0.18),0_0_34px_rgba(107,184,255,0.06),inset_0_1px_0_rgba(246,245,241,0.16)]"
-              : "border-white/20 bg-[radial-gradient(circle_at_22%_0%,rgba(246,245,241,0.10),transparent_32%),radial-gradient(circle_at_100%_18%,rgba(107,184,255,0.08),transparent_28%),linear-gradient(180deg,rgba(31,57,91,0.66),rgba(18,39,70,0.70)_60%,rgba(12,29,55,0.76))] shadow-[0_26px_70px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(246,245,241,0.14)]"
+              ? "border-white/28 bg-[radial-gradient(circle_at_16%_0%,rgba(235,243,252,0.16),transparent_30%),radial-gradient(circle_at_108%_18%,rgba(123,178,225,0.13),transparent_34%),radial-gradient(circle_at_28%_78%,rgba(58,104,146,0.16),transparent_38%),linear-gradient(180deg,rgba(67,99,132,0.66),rgba(49,83,121,0.58)_54%,rgba(35,68,105,0.66))] shadow-[0_24px_58px_rgba(31,68,116,0.20),0_0_30px_rgba(123,178,225,0.06),inset_0_1px_0_rgba(246,245,241,0.20),inset_0_-1px_0_rgba(18,44,76,0.12)]"
+              : "border-white/24 bg-[radial-gradient(circle_at_18%_0%,rgba(235,243,252,0.14),transparent_30%),radial-gradient(circle_at_106%_18%,rgba(123,178,225,0.12),transparent_32%),radial-gradient(circle_at_30%_80%,rgba(58,104,146,0.14),transparent_38%),linear-gradient(180deg,rgba(64,96,130,0.64),rgba(45,80,118,0.58)_58%,rgba(32,66,103,0.66))] shadow-[0_26px_64px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(246,245,241,0.18),inset_0_-1px_0_rgba(18,44,76,0.12)]"
           }`}
         >
           {isHome ? (
             <>
-              <div className="pointer-events-none absolute left-[-32%] top-[-12%] h-48 w-60 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(246,245,241,0.16),rgba(246,245,241,0)_72%)] blur-3xl" />
-              <div className="pointer-events-none absolute bottom-[-18%] right-[-38%] h-60 w-72 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(107,184,255,0.10),rgba(107,184,255,0)_72%)] blur-3xl" />
+              <div className="pointer-events-none absolute left-[-34%] top-[-14%] h-48 w-60 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(246,245,241,0.14),rgba(246,245,241,0)_72%)] blur-3xl" />
+              <div className="pointer-events-none absolute bottom-[-18%] right-[-38%] h-60 w-72 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(123,178,225,0.12),rgba(123,178,225,0)_72%)] blur-3xl" />
             </>
           ) : null}
           {isHome ? (
@@ -292,7 +331,7 @@ export function DesktopShell({ children }: DesktopShellProps) {
               </div>
 
               <div className="profile-section flex items-center gap-3 px-2">
-                <div className="relative h-12 w-12 overflow-hidden rounded-full border border-white/24 bg-[#16365F] shadow-[0_18px_32px_rgba(31,68,116,0.22)]">
+                <div className="relative h-12 w-12 overflow-hidden rounded-full border border-[#EAF1FF]/32 bg-[#14345F] shadow-[0_18px_34px_rgba(7,25,50,0.32),inset_0_1px_0_rgba(255,255,255,0.16)]">
                   <Image
                     src="/zila-profile-kevin.png"
                     alt="Kevin Mwangi"
@@ -304,9 +343,9 @@ export function DesktopShell({ children }: DesktopShellProps) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold text-[#F7F8FC]">Kevin Mwangi</p>
-                  <p className="mt-0.5 truncate text-[12px] font-medium text-[#A7B0C5]">Operations lead</p>
+                  <p className="mt-0.5 truncate text-[12px] font-medium text-[#D4E0F1]">Operations lead</p>
                 </div>
-                <ChevronDown className="h-[15px] w-[15px] text-[#8993AC]" strokeWidth={2} />
+                <ChevronDown className="h-[15px] w-[15px] text-[#D4E0F1]" strokeWidth={2} />
               </div>
             </div>
           ) : (
@@ -322,7 +361,7 @@ export function DesktopShell({ children }: DesktopShellProps) {
                   Projects create pressure. Payments keep work moving.
                 </h1>
                 <p className="mt-2 text-[12px] leading-[1.55] text-[#A7B0C5]">
-                  Proof is generated from the operational activity underneath.
+                  Proof attaches automatically from the operational activity underneath.
                 </p>
               </div>
             </div>
@@ -337,28 +376,24 @@ export function DesktopShell({ children }: DesktopShellProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`relative z-10 flex cursor-pointer items-center gap-2.5 rounded-[13px] px-2.5 py-1 transition-all duration-200 ${
+                  className={`zila-sidebar-nav-link relative z-10 flex cursor-pointer items-center gap-2.5 rounded-[13px] px-2.5 py-1 transition-all duration-200 ${
                     isHome
                       ? isActive
-                        ? "border border-white/18 bg-white/[0.105] text-white shadow-[0_14px_30px_rgba(31,68,116,0.15),inset_0_1px_0_rgba(246,245,241,0.12)]"
-                        : "border border-transparent text-[#D8E7FA] hover:border-white/14 hover:bg-white/[0.065] hover:shadow-[0_12px_24px_rgba(31,68,116,0.12)]"
+                        ? "border border-[#DCEBFF]/28 bg-[linear-gradient(135deg,rgba(234,241,255,0.17),rgba(126,164,210,0.10))] text-white shadow-[0_15px_32px_rgba(7,25,50,0.24),inset_0_1px_0_rgba(246,245,241,0.18),inset_0_-1px_0_rgba(6,22,42,0.12)]"
+                        : "border border-transparent text-[#E0E9F7] hover:border-[#DCEBFF]/18 hover:bg-white/[0.075] hover:shadow-[0_12px_26px_rgba(7,25,50,0.18)]"
                       : isActive
-                        ? "border border-white/12 bg-[#F3F5F9]/10 shadow-[0_16px_34px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(247,248,252,0.10)]"
-                        : "border border-transparent text-[#A7B0C5] hover:border-white/10 hover:bg-white/[0.06] hover:shadow-[0_12px_26px_rgba(1,8,20,0.14)]"
+                        ? "border border-[#DCEBFF]/22 bg-[linear-gradient(135deg,rgba(234,241,255,0.14),rgba(102,145,195,0.09))] shadow-[0_16px_34px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(247,248,252,0.14)]"
+                        : "border border-transparent text-[#B6C3D6] hover:border-[#DCEBFF]/14 hover:bg-white/[0.07] hover:shadow-[0_12px_26px_rgba(1,8,20,0.18)]"
                   }`}
                 >
                   <IconTile
                     glow="none"
                     className={
                       isHome
-                        ? `h-[30px] w-[30px] rounded-[10px] border-white/8 ${
-                            isActive
-                              ? "bg-white/11 text-white shadow-[0_0_9px_rgba(255,255,255,0.035),inset_0_1px_0_rgba(255,255,255,0.10)]"
-                              : "bg-white/[0.055] text-[#AEBBDA] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]"
-                          }`
+                        ? `zila-sidebar-nav-icon h-[30px] w-[30px] rounded-[11px] ${isActive ? "zila-sidebar-nav-icon-active" : ""}`
                         : isActive
-                          ? "bg-white/12 text-[#F7F8FC]"
-                          : "bg-white/[0.06] text-[#A7B0C5]"
+                          ? "zila-sidebar-nav-icon zila-sidebar-nav-icon-active rounded-[11px]"
+                          : "zila-sidebar-nav-icon rounded-[11px]"
                     }
                   >
                     <Icon className={isHome ? "h-[15px] w-[15px]" : "h-[15px] w-[15px]"} strokeWidth={isHome ? 1.9 : 2} />
@@ -366,17 +401,17 @@ export function DesktopShell({ children }: DesktopShellProps) {
                   <div className="min-w-0">
                     <p
                       className={`text-[13px] font-semibold ${
-                        isHome ? (isActive ? "text-white" : "text-[#D8E0F1]") : isActive ? "text-[#F7F8FC]" : "text-[#D8E0F1]"
+                        isHome ? (isActive ? "text-white" : "text-[#F4F8FF]") : isActive ? "text-[#F7F8FC]" : "text-[#EEF4FF]"
                       }`}
                     >
                       {item.label}
                     </p>
-                    <p className={`truncate text-[11px] ${isHome ? (isActive ? "text-[#D5DAFF]" : "text-[#8C96AC]") : "text-[#A7B0C5]"}`}>
+                    <p className={`truncate text-[11px] ${isHome ? (isActive ? "text-[#DDE7F6]" : "text-[#D1DCEC]") : "text-[#D4E0F1]"}`}>
                       {item.description}
                     </p>
                   </div>
                   {isActive ? (
-                    <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[#A8F5E7] shadow-[0_0_10px_rgba(76,242,212,0.26)]" />
+                    <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[#A9D8FF] shadow-[0_0_10px_rgba(129,190,245,0.30)]" />
                   ) : null}
                 </Link>
               );
@@ -386,17 +421,17 @@ export function DesktopShell({ children }: DesktopShellProps) {
           <div
             className={`zila-card-hover mt-3 rounded-[19px] border p-2.5 text-white ${
               isHome
-                ? "border-white/18 bg-[linear-gradient(155deg,#17345F,#102A4F_54%,#1C4A7A)] shadow-[0_22px_50px_rgba(31,68,116,0.22),inset_0_1px_0_rgba(234,241,255,0.14)]"
-                : "border-white/10 bg-[linear-gradient(180deg,rgba(19,35,71,0.96),rgba(22,43,82,0.88))] shadow-[0_18px_42px_rgba(1,8,20,0.24)]"
+                ? "border-[#CFE0F6]/22 bg-[radial-gradient(circle_at_100%_0%,rgba(58,122,187,0.24),transparent_38%),linear-gradient(155deg,#173760,#102B50_54%,#0B2141)] shadow-[0_22px_50px_rgba(7,25,50,0.30),inset_0_1px_0_rgba(234,241,255,0.16)]"
+                : "border-[#CFE0F6]/16 bg-[linear-gradient(180deg,rgba(19,38,74,0.98),rgba(14,33,63,0.94))] shadow-[0_18px_42px_rgba(1,8,20,0.30)]"
             }`}
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7CF3FF]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87E6F5]">
               Quick path
             </p>
             <p className="mt-1.5 text-[14px] font-semibold tracking-[-0.03em]">
               Coordinate the next move.
             </p>
-            <p className="mt-1.5 text-[11px] leading-[1.5] text-[#CBD5E1]">
+            <p className="mt-1.5 text-[11px] leading-[1.5] text-[#E1EAF7]">
               Project pressure, payment timing, and proof stay connected.
             </p>
             <div className="mt-2 rounded-[14px] border border-[#D9FF57]/12 bg-[#D9FF57]/[0.055] px-3 py-2">
@@ -404,20 +439,20 @@ export function DesktopShell({ children }: DesktopShellProps) {
                 <span className="zila-live-dot h-1.5 w-1.5 rounded-full bg-[#D9FF57]" />
                 {syncState.label}
               </p>
-              <p className="mt-1 text-[11px] leading-[1.4] text-[#C9D4F5]">{syncState.detail}</p>
+              <p className="mt-1 text-[11px] leading-[1.4] text-[#E3EBFF]">{syncState.detail}</p>
             </div>
             <button
               type="button"
               onClick={openProductGuide}
-              className="mt-2.5 inline-flex h-8 w-full items-center justify-center rounded-full border border-[#7CF3FF]/18 bg-white/[0.07] px-4 text-[12px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.10]"
+              className="mt-2.5 inline-flex h-8 w-full items-center justify-center rounded-full border border-[#7CF3FF]/18 bg-white/[0.07] px-4 text-[12px] font-semibold text-white transition hover:bg-white/[0.10]"
             >
               How Zila works
             </button>
             <Link
-              href="/payments"
-              className="zila-button-hover mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#1D4ED8] px-4 text-[13px] font-semibold text-white shadow-[0_18px_34px_rgba(29,78,216,0.22)]"
+              href="/payments/send"
+              className="zila-button-hover mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#1D4ED8] px-4 text-[13px] font-semibold leading-tight text-white shadow-[0_18px_34px_rgba(29,78,216,0.22)]"
             >
-              Open Payments
+              Make Payment
               <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2} />
             </Link>
           </div>
@@ -440,7 +475,7 @@ export function DesktopShell({ children }: DesktopShellProps) {
                 </div>
                 <div className="text-center">
                   <p className="text-[12px] font-medium text-[#F3F8FF]">Good morning,</p>
-                  <p className="mt-1 text-[20px] font-semibold leading-none tracking-[-0.05em] text-[#F7F8FC]">Amara</p>
+                  <p className="mt-1 text-[20px] font-semibold leading-none tracking-[-0.05em] text-[#F7F8FC]">Kevin</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <OperationalWalletStatus compact />
@@ -461,7 +496,7 @@ export function DesktopShell({ children }: DesktopShellProps) {
                     href="/payments"
                     className="zila-button-hover inline-flex items-center gap-2 rounded-full border border-[#D7E8FF]/20 bg-[#173D6D] px-3.5 py-2 text-[12px] font-semibold text-white shadow-[0_18px_34px_rgba(31,68,116,0.26),inset_0_1px_0_rgba(255,255,255,0.10)]"
                   >
-                    Coordinate Payments
+                    Make Payment
                     <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2} />
                   </Link>
                 </div>

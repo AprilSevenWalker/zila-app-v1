@@ -52,12 +52,25 @@ function getWalletDisplayState(moneySource: MoneySourceState, latestPayment: Lat
   };
 }
 
+const disconnectedWalletState: MoneySourceState = {
+  connected: false,
+  sourceLabel: "Stable balance",
+  walletAddress: "",
+  walletAddressShort: "",
+  status: "not-connected",
+  network: "XRPL Mainnet",
+  proofEnabled: false,
+};
+
 export function OperationalWalletStatus({ compact = false }: { compact?: boolean }) {
-  const [moneySource, setMoneySource] = useState<MoneySourceState>(getMoneySourceState);
-  const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(getLatestPaymentTransaction);
+  const [mounted, setMounted] = useState(false);
+  const [moneySource, setMoneySource] = useState<MoneySourceState>(disconnectedWalletState);
+  const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
   const display = useMemo(() => getWalletDisplayState(moneySource, latestPayment), [moneySource, latestPayment]);
 
   useEffect(() => {
+    setMounted(true);
+
     const updateWallet = () => setMoneySource(getMoneySourceState());
     const updatePayment = () => setLatestPayment(getLatestPaymentTransaction());
     const unsubscribeWallet = subscribeToMoneySource(updateWallet);
@@ -72,7 +85,7 @@ export function OperationalWalletStatus({ compact = false }: { compact?: boolean
     };
   }, []);
 
-  if (!moneySource.connected || !moneySource.walletAddress) {
+  if (!mounted || !moneySource.connected || !moneySource.walletAddress) {
     return (
       <Link
         href="/payments/connect-account"

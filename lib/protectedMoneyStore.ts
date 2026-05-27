@@ -245,7 +245,7 @@ export function releaseReserveAmount(reserveId: string, amount: number) {
   });
 }
 
-export function useReserveForPayment(input: {
+export function applyReserveForPayment(input: {
   reserveId: string;
   amount: number;
   paymentLabel: string;

@@ -748,7 +748,7 @@ export default function StablecoinPaymentPage() {
         <div className="relative space-y-6">
           <FlowBackNav
             items={[
-              { label: "Back to Payment Methods", href: "/payments/choose-method", primary: !previousStep },
+              { label: "Back to Payment Methods", href: "/payments/send", primary: !previousStep },
               ...(previousStep && previousStepLabel
                 ? [{ label: previousStepLabel, onClick: () => goToStep(previousStep), disabled: isConfirming }]
                 : []),

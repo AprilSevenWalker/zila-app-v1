@@ -18,16 +18,16 @@ interface ProfileState {
 function getProfileState(): ProfileState {
   if (typeof window === "undefined") {
     return {
-      businessName: "Amara's Designs",
-      businessType: "Studio",
+      businessName: "Zila Operations",
+      businessType: "Operations workspace",
       firstProjectName: "Project Horizon",
       firstProjectTemplate: "Client delivery",
     };
   }
 
   return {
-    businessName: window.localStorage.getItem("zila-business-name") || "Amara's Designs",
-    businessType: window.localStorage.getItem("zila-business-type") || "Studio",
+    businessName: window.localStorage.getItem("zila-business-name") || "Zila Operations",
+    businessType: window.localStorage.getItem("zila-business-type") || "Operations workspace",
     firstProjectName: window.localStorage.getItem("zila-first-project-name") || "Project Horizon",
     firstProjectTemplate: window.localStorage.getItem("zila-first-project-template") || "Client delivery",
   };
@@ -92,14 +92,14 @@ export function ProfileScreen() {
                     </span>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#AFC0FF]">Name</p>
-                      <p className="mt-1 text-[17px] font-semibold text-white">Amara Mwangi</p>
+                      <p className="mt-1 text-[17px] font-semibold text-white">Kevin</p>
                     </div>
                   </div>
                 </div>
                 <div className="rounded-[20px] border border-white/12 bg-white/[0.08] p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#AFC0FF]">Email</p>
-                  <p className="mt-2 text-[17px] font-semibold text-white">amara@zila.app</p>
-                  <p className="mt-1 text-[13px] text-[#C9D4F5]">Founder account</p>
+                  <p className="mt-2 text-[17px] font-semibold text-white">kevin@zila.demo</p>
+                  <p className="mt-1 text-[13px] text-[#C9D4F5]">Operations Lead</p>
                 </div>
               </div>
             </InfoCard>

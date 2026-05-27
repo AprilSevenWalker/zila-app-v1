@@ -13,7 +13,7 @@ import { AppShell } from "@/components/ui/AppShell";
 export default function HomePage() {
   return (
     <AppShell>
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <div className="space-y-4">
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-3">

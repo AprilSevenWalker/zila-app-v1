@@ -316,9 +316,9 @@ export function ReserveFlowScreen() {
                   </p>
                 </div>
 
-                <div className="rounded-[24px] border border-[#D9FF57]/24 bg-[#D9FF57]/12 p-4 text-[#F7FFC8] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
+                <div className="w-full min-w-0 rounded-[24px] border border-[#D9FF57]/24 bg-[#D9FF57]/12 p-4 text-[#F7FFC8] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] sm:w-auto sm:min-w-[210px]">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">Safe to spend</p>
-                  <p className="mt-2 text-[34px] font-semibold tracking-[-0.06em]">{formatCurrency(summary.safeToSpend)}</p>
+                  <p className="mt-2 whitespace-nowrap text-[32px] font-semibold tracking-[-0.055em] sm:text-[34px] sm:tracking-[-0.06em]">{formatCurrency(summary.safeToSpend)}</p>
                   <p className="mt-2 text-[12px] leading-[1.5] text-[#F1FFB8]">Available after protected and committed money.</p>
                 </div>
               </div>
@@ -332,7 +332,7 @@ export function ReserveFlowScreen() {
                 ].map(([label, value, tone]) => (
                   <div key={label as string} className="rounded-[20px] border border-white/16 bg-[#102A4F]/48 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-sm">
                     <p className="text-[10px] font-medium text-[#C9D4F5]">{label}</p>
-                    <p className={`mt-2 text-[20px] font-semibold tracking-[-0.04em] ${tone}`}>{formatCurrency(value as number)}</p>
+                    <p className={`mt-2 whitespace-nowrap text-[20px] font-semibold tracking-[-0.04em] ${tone}`}>{formatCurrency(value as number)}</p>
                   </div>
                 ))}
               </div>

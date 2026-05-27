@@ -35,6 +35,13 @@ import { saveAskOperationalUpdate } from "@/lib/askOperationalStore";
 
 type FlowType = "cost-increase" | "payment-recorded" | "supplier-check" | "decision-question";
 type ImpactLevel = "Minor" | "Medium" | "High";
+type VoiceStatus =
+  | "idle"
+  | "recording"
+  | "processing"
+  | "sending"
+  | "applied"
+  | "error";
 
 interface InterpretationItem {
   label: string;
@@ -64,12 +71,20 @@ interface FlowData {
   actionLabels: string[];
 }
 
+interface VoiceMessage {
+  id: string;
+  audioUrl: string;
+  durationSeconds: number;
+  transcript: string;
+  transcriptLabel: "Demo transcription" | "Transcription";
+}
+
 const prompts = [
-  "Can we still pay Northline?",
+  "Can we still pay Northline Friday?",
+  "What changed after the supplier payout?",
   "Which projects are under pressure?",
-  "How did this payout affect reserves?",
-  "Generate investor proof package.",
-  "Client delayed payment",
+  "Show reserve movement",
+  "What affects runway most this week?",
 ];
 
 const operationalFocus = [
@@ -91,6 +106,14 @@ const operationalFocus = [
 ];
 
 const liveSystemStates = ["Operations updating", "Reserve recalculating", "Proof record syncing", "Cashflow impact recalculated"];
+const operationalProcessingSteps = [
+  "Updating project state",
+  "Recalculating reserve impact",
+  "Evaluating payout pressure",
+  "Syncing proof history",
+  "Updating operational memory",
+];
+const demoVoiceTranscript = "Move 300 dollars from operations reserve to delivery for Helix Project";
 
 function extractAmount(input: string) {
   const match = input.match(/([£$])?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s?(k|thousand)?/i);
@@ -371,7 +394,7 @@ function getFlowData(input: string): FlowData {
       reserveImpact: "Protected reserve remains above threshold after payout.",
       consequence: "Supplier obligation clears without weakening next week's operating range.",
       pressure: "Watch",
-      actions: ["Send payment", "Review reserve", "Generate proof"],
+      actions: ["Send payment", "Review reserve", "View proof"],
     });
   }
 
@@ -385,11 +408,39 @@ function getFlowData(input: string): FlowData {
       reserveImpact: "Reserve protection remains active across upcoming obligations.",
       consequence: "One coordinated payout should keep the portfolio stable.",
       pressure: "Watch",
-      actions: ["Open Payments", "Review Projects", "Generate proof"],
+      actions: ["Open Payments", "Review Projects", "View proof"],
     });
   }
 
   if (lower.includes("affect reserves") || lower.includes("affected reserves") || lower.includes("reserve")) {
+    if (amountText && lower.includes("move") && lower.includes("delivery")) {
+      return {
+        type: "payment-recorded",
+        interpretation: [
+          { label: "Got it", value: project },
+          { label: "Detected", value: "Reserve transfer" },
+          { label: "Amount", value: amountText },
+        ],
+        guidanceHeadline: `${amountText} reserve movement prepared for ${project}.`,
+        guidanceText: "Zila will move the operating context from Operations Reserve into Delivery and keep the reserve impact visible.",
+        memoryPattern: "Reserve movements update project pressure, payment readiness, and operational memory together.",
+        applySteps: ["Record reserve movement", "Refresh delivery allocation", "Sync operational record"],
+        completionLines: ["All done", `${project} updated`, `${amountText} reserve movement recorded`, "Operational record created"],
+        nextActionPrimary: "Record commitment",
+        nextActionFallback: "Review project allocation",
+        proofText: `Recorded. Reserve movement of ${amountText} added to ${project}. Time stamped and added to verified history.`,
+        detectedAmount: amountText,
+        detectedAmountValue: amountValue,
+        needsAmountClarification: false,
+        impactedProject: project,
+        pressureLevel: "Watch",
+        impactLevel: "Medium",
+        reserveImpact: "Operations Reserve decreases while Delivery allocation gains coverage.",
+        operationalConsequence: "Delivery gets more working room while reserve protection remains visible.",
+        actionLabels: ["Record commitment", "Move funds", "Review Projects"],
+      };
+    }
+
     return createOperationalContextFlow({
       project: "Project Horizon",
       detected: "Reserve impact check",
@@ -403,15 +454,15 @@ function getFlowData(input: string): FlowData {
     });
   }
 
-  if (lower.includes("proof package") || lower.includes("investor")) {
+  if (lower.includes("verified operations") || lower.includes("investor")) {
     return createOperationalContextFlow({
       project: "Portfolio",
-      detected: "Investor proof package",
-      headline: "Investor proof package is ready to generate.",
-      guidance: "Zila will use supplier payouts, reserve movements, settlement records, and project updates from operational memory.",
-      memory: "Proof is generated from activity already recorded across Projects and Payments.",
+      detected: "Verified operational record",
+      headline: "Verified operational records are ready to review.",
+      guidance: "Zila uses supplier payouts, reserve movements, settlement records, and project updates already synced to operational memory.",
+      memory: "Proof attaches automatically from activity recorded across Projects and Payments.",
       reserveImpact: "Reserve protection, payout timing, and verified settlement records will be included.",
-      consequence: "External evidence package can be shared without rebuilding the history manually.",
+      consequence: "External verification can be shared without rebuilding the history manually.",
       pressure: "Low",
       actions: ["Open Proof", "Review timeline", "Record update"],
     });
@@ -725,13 +776,26 @@ export function AskZilaScreen() {
   const searchParams = useSearchParams();
   const thinkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processingTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const applyStageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const voiceStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingSecondsRef = useRef(0);
+  const voiceSequenceRef = useRef(0);
   const [query, setQuery] = useState("");
   const [activePrompt, setActivePrompt] = useState<string | null>(null);
   const [submittedMessage, setSubmittedMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voiceMessage, setVoiceMessage] = useState<VoiceMessage | null>(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [activeProcessingStep, setActiveProcessingStep] = useState(0);
   const [hasResponse, setHasResponse] = useState(false);
   const [visibleSteps, setVisibleSteps] = useState(0);
   const [hasApplied, setHasApplied] = useState(false);
@@ -754,6 +818,12 @@ export function AskZilaScreen() {
       ? safeBefore + amountImpact
       : Math.max(safeBefore - amountImpact, 0)
     : safeBefore;
+
+  const clearProcessingTimers = () => {
+    processingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+    processingTimeoutsRef.current = [];
+  };
+
   useEffect(() => {
     return () => {
       if (thinkingTimeoutRef.current) {
@@ -762,12 +832,20 @@ export function AskZilaScreen() {
       if (revealTimeoutRef.current) {
         clearTimeout(revealTimeoutRef.current);
       }
+      clearProcessingTimers();
       if (applyStageTimeoutRef.current) {
         clearTimeout(applyStageTimeoutRef.current);
       }
       if (applyCompleteTimeoutRef.current) {
         clearTimeout(applyCompleteTimeoutRef.current);
       }
+      if (voiceTimerRef.current) {
+        clearInterval(voiceTimerRef.current);
+      }
+      if (voiceStatusTimeoutRef.current) {
+        clearTimeout(voiceStatusTimeoutRef.current);
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
@@ -801,12 +879,25 @@ export function AskZilaScreen() {
     if (revealTimeoutRef.current) {
       clearTimeout(revealTimeoutRef.current);
     }
+    clearProcessingTimers();
+    clearVoiceTimers();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    } else {
+      resetRecordingHardware();
+    }
     setQuery("");
     setActivePrompt(null);
     setSubmittedMessage("");
     setIsThinking(false);
+    setActiveProcessingStep(0);
     setHasResponse(false);
     setVisibleSteps(0);
+    setVoiceStatus("idle");
+    setVoiceError(null);
+    setVoiceMessage(null);
+    setRecordingSeconds(0);
+    setIsRecording(false);
     resetExecutionState();
   };
 
@@ -816,6 +907,7 @@ export function AskZilaScreen() {
     }
 
     const createdAtIso = new Date().toISOString();
+    const recordId = createdAtIso.replace(/[^0-9]/g, "");
     const txHash = `ASK-${generateMockTransactionHash()}`;
     const amountValue = flow.detectedAmountValue ?? 0;
     const amountLabel = flow.detectedAmount ?? (amountValue ? `$${amountValue.toLocaleString("en-US")}` : "$0");
@@ -829,7 +921,7 @@ export function AskZilaScreen() {
       });
     } else if (amountValue > 0) {
       savePaymentMovement({
-        id: `ask-movement-${Date.now()}`,
+        id: `ask-movement-${recordId}`,
         type: movementType,
         title:
           flow.type === "supplier-check"
@@ -850,7 +942,7 @@ export function AskZilaScreen() {
     }
 
     saveProofTransaction({
-      id: `ask-proof-${Date.now()}`,
+      id: `ask-proof-${recordId}`,
       walletAddress: "operational-memory",
       walletAddressShort: "Ask Zila",
       status: "Confirmed",
@@ -874,7 +966,7 @@ export function AskZilaScreen() {
     const proofReference = `OPS-${txHash.slice(-8)}`;
 
     saveAskOperationalUpdate({
-      id: `ask-update-${Date.now()}`,
+      id: `ask-update-${recordId}`,
       project: flow.impactedProject,
       change: flow.interpretation[1]?.value ?? "Operational update",
       consequence: flow.operationalConsequence,
@@ -902,15 +994,28 @@ export function AskZilaScreen() {
     if (revealTimeoutRef.current) {
       clearTimeout(revealTimeoutRef.current);
     }
+    clearProcessingTimers();
 
     setActivePrompt(trimmed);
     setSubmittedMessage(trimmed);
+    setQuery("");
     setIsThinking(true);
+    setActiveProcessingStep(0);
     setHasResponse(false);
     setVisibleSteps(0);
     resetExecutionState();
 
+    operationalProcessingSteps.forEach((_, index) => {
+      const timeout = setTimeout(() => {
+        setActiveProcessingStep(index);
+      }, index * 260);
+
+      processingTimeoutsRef.current.push(timeout);
+    });
+
     thinkingTimeoutRef.current = setTimeout(() => {
+      clearProcessingTimers();
+      setActiveProcessingStep(operationalProcessingSteps.length - 1);
       setIsThinking(false);
       setHasResponse(true);
       setVisibleSteps(1);
@@ -950,6 +1055,7 @@ export function AskZilaScreen() {
       setIsApplying(false);
       setApplyStage("idle");
       setHasApplied(true);
+      setConfirmedAction(flow.nextActionPrimary);
     }, 1200);
   };
 
@@ -959,17 +1065,134 @@ export function AskZilaScreen() {
     submitMessage(prompt);
   };
 
-  const handleRecordingToggle = () => {
-    if (isRecording) {
-      const spokenPrompt = "I paid 2000 for materials on Project Horizon.";
-      setIsRecording(false);
-      setQuery(spokenPrompt);
-      submitMessage(spokenPrompt);
+  const clearVoiceTimers = () => {
+    if (voiceTimerRef.current) {
+      clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+
+    if (voiceStatusTimeoutRef.current) {
+      clearTimeout(voiceStatusTimeoutRef.current);
+      voiceStatusTimeoutRef.current = null;
+    }
+  };
+
+  const resetRecordingHardware = () => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    mediaRecorderRef.current = null;
+  };
+
+  const startVoiceRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setVoiceStatus("error");
+      setVoiceError("Voice update could not be recorded. Try typing the update instead.");
       return;
     }
 
-    setIsRecording(true);
-    setConfirmedAction(null);
+    try {
+      clearVoiceTimers();
+      setVoiceError(null);
+      setVoiceMessage(null);
+      setRecordingSeconds(0);
+      setConfirmedAction(null);
+      audioChunksRef.current = [];
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      recordingSecondsRef.current = 0;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = () => {
+        clearVoiceTimers();
+        resetRecordingHardware();
+        setIsRecording(false);
+        setVoiceStatus("error");
+        setVoiceError("Voice update could not be recorded. Try typing the update instead.");
+      };
+
+      recorder.onstop = () => {
+        const durationSeconds = Math.max(1, recordingSecondsRef.current);
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+
+        clearVoiceTimers();
+        resetRecordingHardware();
+        setIsRecording(false);
+
+        if (!audioBlob.size) {
+          setVoiceStatus("error");
+          setVoiceError("Voice update could not be recorded. Try typing the update instead.");
+          return;
+        }
+
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const transcript = demoVoiceTranscript;
+        const voiceUpdate: VoiceMessage = {
+          id: `voice-${voiceSequenceRef.current}`,
+          audioUrl,
+          durationSeconds,
+          transcript,
+          transcriptLabel: "Demo transcription",
+        };
+
+        setVoiceStatus("processing");
+        setVoiceMessage(voiceUpdate);
+
+        voiceStatusTimeoutRef.current = setTimeout(() => {
+          setVoiceStatus("sending");
+          submitMessage(transcript);
+
+          voiceStatusTimeoutRef.current = setTimeout(() => {
+            setVoiceStatus("applied");
+          }, 2200);
+        }, 650);
+      };
+
+      recorder.start();
+      voiceSequenceRef.current += 1;
+      setIsRecording(true);
+      setVoiceStatus("recording");
+      voiceTimerRef.current = setInterval(() => {
+        recordingSecondsRef.current += 1;
+        setRecordingSeconds(recordingSecondsRef.current);
+      }, 1000);
+    } catch {
+      clearVoiceTimers();
+      resetRecordingHardware();
+      setIsRecording(false);
+      setVoiceStatus("error");
+      setVoiceError("Microphone access is needed to record a voice update.");
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    const recorder = mediaRecorderRef.current;
+
+    if (!recorder || recorder.state === "inactive") {
+      setIsRecording(false);
+      setVoiceStatus("error");
+      setVoiceError("Voice update could not be recorded. Try typing the update instead.");
+      return;
+    }
+
+    setVoiceStatus("processing");
+    recorder.stop();
+  };
+
+  const handleRecordingToggle = () => {
+    if (isRecording) {
+      stopVoiceRecording();
+      return;
+    }
+
+    void startVoiceRecording();
   };
 
   const handleMoveFunds = () => {
@@ -987,21 +1210,22 @@ export function AskZilaScreen() {
       availableBalanceLabel: "$42,300",
     });
 
-    router.push("/payments/choose-method");
+    router.push("/payments/send");
   };
 
   const handleActionCta = (label: string) => {
     if (label === "Send payment" || label === "Move funds") {
+      setConfirmedAction(label);
       handleMoveFunds();
       return;
     }
 
     if (label === "Open Payments" || label === "Review payout") {
-      router.push("/payments/choose-method");
+      router.push("/payments/send");
       return;
     }
 
-    if (label === "Open Proof" || label === "Generate proof" || label === "Review timeline") {
+    if (label === "Open Proof" || label === "View proof" || label === "Review timeline") {
       router.push("/proof");
       return;
     }
@@ -1104,7 +1328,7 @@ export function AskZilaScreen() {
           </div>
 
           <section className="mt-4 flex flex-1 flex-col overflow-hidden rounded-[28px] border border-[#17345F]/18 bg-[linear-gradient(180deg,#183B6A_0%,#10233F_50%,#081525_100%)] text-white shadow-[0_30px_78px_rgba(16,35,63,0.30),inset_0_1px_0_rgba(255,255,255,0.16)]">
-            <div className="relative flex min-h-[600px] flex-1 flex-col px-4 py-5 md:px-6 md:py-6">
+            <div className="relative flex min-h-[560px] flex-1 flex-col px-4 py-4 sm:min-h-[600px] md:px-6 md:py-5">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(ellipse_at_50%_0%,rgba(103,232,249,0.20),transparent_62%)]" />
               <div className="pointer-events-none absolute inset-x-8 top-24 h-px bg-[linear-gradient(90deg,transparent,rgba(103,232,249,0.42),transparent)]" />
 
@@ -1148,10 +1372,10 @@ export function AskZilaScreen() {
                 </button>
               </div>
 
-              <div className="relative mt-6 flex-1 overflow-y-auto pb-4 pr-0 md:pr-2">
-                <div className="mx-auto max-w-[820px] space-y-6">
+              <div className="relative mt-4 flex-1 overflow-y-auto pb-4 pr-0 md:mt-5 md:pr-2">
+                <div className="mx-auto max-w-[820px] space-y-5">
                   {!hasConversation ? (
-                    <div className="pt-3 md:pt-6">
+                    <div className="pt-1 md:pt-3">
                       <div className="rounded-[30px] border border-white/12 bg-white/[0.06] p-5 shadow-[0_24px_58px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.10)] md:p-6">
                         <div className="flex flex-wrap items-start justify-between gap-5">
                           <div className="max-w-[560px]">
@@ -1223,8 +1447,23 @@ export function AskZilaScreen() {
                   {hasConversation ? (
                     <div className="ml-auto max-w-[690px] rounded-[26px] border border-white/10 bg-white/[0.08] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]">
                       <div className="flex items-start justify-between gap-4">
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#AFC0FF]">You</p>
+                          {voiceMessage ? (
+                            <div className="mt-2 rounded-[18px] border border-[#D9FF57]/14 bg-[#D9FF57]/[0.06] p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-[13px] font-semibold text-[#F1FFB8]">Voice update</p>
+                                  <p className="mt-1 text-[11px] text-[#C9D4F5]">{voiceMessage.durationSeconds}s recording</p>
+                                </div>
+                                <audio controls src={voiceMessage.audioUrl} className="h-9 max-w-full" />
+                              </div>
+                              <div className="mt-3 rounded-[14px] border border-white/8 bg-[#071526]/32 px-3 py-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D9FF57]">{voiceMessage.transcriptLabel}</p>
+                                <p className="mt-1 text-[13px] font-semibold leading-[1.45] text-white">{voiceMessage.transcript}</p>
+                              </div>
+                            </div>
+                          ) : null}
                           <p className="mt-2 text-[18px] font-semibold leading-[1.45] tracking-[-0.02em] text-white">{submittedMessage}</p>
                         </div>
                         {quickActionLabel ? (
@@ -1255,11 +1494,29 @@ export function AskZilaScreen() {
                             {[12, 26, 18, 34, 24, 30, 16, 28, 20, 32].map((height, index) => (
                               <span
                                 key={`${height}-${index}`}
-                                className={`w-1.5 rounded-full transition-all ${isThinking ? "bg-[#D9FF57] shadow-[0_0_10px_rgba(217,255,87,0.22)]" : "bg-[#D9FF57]/34"}`}
+                                className={`w-1.5 rounded-full transition-all ${isThinking ? "zila-voice-wave-bar bg-[#D9FF57] shadow-[0_0_10px_rgba(217,255,87,0.22)]" : "bg-[#D9FF57]/34"}`}
+                                data-wave-index={index}
                                 style={{ height: `${isThinking ? height : Math.max(7, height * 0.38)}px` }}
                               />
                             ))}
                           </div>
+                          {isThinking ? (
+                            <div className="mt-5 grid gap-2">
+                              {operationalProcessingSteps.map((step, index) => (
+                                <div
+                                  key={step}
+                                  className={`flex items-center gap-2 rounded-[15px] border px-3 py-2 transition ${
+                                    index <= activeProcessingStep
+                                      ? "border-[#D9FF57]/18 bg-[#D9FF57]/[0.07] text-[#F1FFB8]"
+                                      : "border-white/8 bg-white/[0.035] text-[#8FA4C3]"
+                                  }`}
+                                >
+                                  <span className={`h-1.5 w-1.5 rounded-full ${index === activeProcessingStep ? "zila-live-dot bg-[#D9FF57]" : index < activeProcessingStep ? "bg-[#D9FF57]" : "bg-[#67E8F9]/40"}`} />
+                                  <p className="text-[12px] font-semibold">{step}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
                           {!isThinking ? (
                             <p className="mt-2 text-[12px] font-semibold text-[#EAFFB4]">Operating range recalculated</p>
                           ) : null}
@@ -1298,7 +1555,7 @@ export function AskZilaScreen() {
 
                   {shouldShowReaction ? (
                     <div
-                      className={`zila-flow-step ml-10 max-w-[650px] rounded-[24px] p-4 transition-all ${impactToneClass}`}
+                      className={`zila-flow-step ml-0 sm:ml-10 max-w-[650px] rounded-[24px] p-4 transition-all ${impactToneClass}`}
                       style={{ animationDelay: "90ms" }}
                     >
                       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C7F7FF]">Live update</p>
@@ -1327,7 +1584,7 @@ export function AskZilaScreen() {
 
                   {shouldShowReserve ? (
                     <div
-                      className="zila-flow-step ml-10 max-w-[610px] rounded-[24px] border border-[#5EEAD4]/18 bg-[linear-gradient(180deg,rgba(94,234,212,0.09),rgba(7,21,38,0.34))] p-4 shadow-[0_18px_42px_rgba(94,234,212,0.05),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
+                      className="zila-flow-step ml-0 sm:ml-10 max-w-[610px] rounded-[24px] border border-[#5EEAD4]/18 bg-[linear-gradient(180deg,rgba(94,234,212,0.09),rgba(7,21,38,0.34))] p-4 shadow-[0_18px_42px_rgba(94,234,212,0.05),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
                       style={{ animationDelay: "110ms" }}
                     >
                       <div className="flex items-start gap-3">
@@ -1346,7 +1603,7 @@ export function AskZilaScreen() {
 
                   {shouldShowAction ? (
                     <div
-                      className="zila-flow-step ml-10 max-w-[610px] rounded-[24px] border border-[#D9FF57]/16 bg-[linear-gradient(180deg,rgba(217,255,87,0.08),rgba(7,21,38,0.44))] p-4 shadow-[0_18px_44px_rgba(217,255,87,0.06),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
+                      className="zila-flow-step ml-0 sm:ml-10 max-w-[610px] rounded-[24px] border border-[#D9FF57]/16 bg-[linear-gradient(180deg,rgba(217,255,87,0.08),rgba(7,21,38,0.44))] p-4 shadow-[0_18px_44px_rgba(217,255,87,0.06),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
                       style={{ animationDelay: "130ms" }}
                     >
                       <div className="flex items-start gap-3">
@@ -1374,6 +1631,13 @@ export function AskZilaScreen() {
                               </button>
                             ))}
                           </div>
+                          {isApplying ? (
+                            <p className="mt-3 text-[12px] font-semibold text-[#EAFFB4]">
+                              {applyStage === "updating" ? "Update applied" : "Sending to Zila"}
+                            </p>
+                          ) : confirmedAction ? (
+                            <p className="mt-3 text-[12px] font-semibold text-[#EAFFB4]">{confirmedAction} applied.</p>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -1381,7 +1645,7 @@ export function AskZilaScreen() {
 
                   {shouldShowProof ? (
                     <div
-                      className="zila-flow-step ml-10 max-w-[610px] rounded-[24px] border border-[#9FE870]/18 bg-[linear-gradient(180deg,rgba(60,138,95,0.16),rgba(7,21,38,0.42))] p-4 shadow-[0_18px_44px_rgba(60,138,95,0.08),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
+                      className="zila-flow-step ml-0 sm:ml-10 max-w-[610px] rounded-[24px] border border-[#9FE870]/18 bg-[linear-gradient(180deg,rgba(60,138,95,0.16),rgba(7,21,38,0.42))] p-4 shadow-[0_18px_44px_rgba(60,138,95,0.08),inset_0_1px_0_rgba(255,255,255,0.07)] transition-all"
                       style={{ animationDelay: "150ms" }}
                     >
                       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1418,20 +1682,20 @@ export function AskZilaScreen() {
                 </div>
               </div>
 
-              <div className="relative mt-5 border-t border-white/10 pt-5">
-                <div className="rounded-[28px] border border-white/14 bg-[#071526]/62 p-3 shadow-[0_24px_58px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl focus-within:border-[#D9FF57]/24 focus-within:shadow-[0_24px_58px_rgba(0,0,0,0.16),0_0_26px_rgba(217,255,87,0.07),inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <div className="zila-safe-bottom sticky bottom-0 z-20 mt-4 border-t border-white/10 bg-[linear-gradient(180deg,rgba(8,21,37,0),rgba(8,21,37,0.82)_18%,#081525_100%)] pt-4">
+                <div className={`rounded-[28px] border border-white/14 bg-[#071526]/72 p-3 shadow-[0_24px_58px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl transition focus-within:border-[#D9FF57]/24 focus-within:shadow-[0_24px_58px_rgba(0,0,0,0.16),0_0_26px_rgba(217,255,87,0.07),inset_0_1px_0_rgba(255,255,255,0.08)] ${isRecording ? "zila-voice-breathing border-[#D9FF57]/30" : ""}`}>
                   <div className="grid gap-3 md:grid-cols-[88px_minmax(0,1fr)] md:items-stretch">
                     <button
                       type="button"
                       onClick={handleRecordingToggle}
                       className={`relative flex min-h-[88px] items-center justify-center overflow-hidden rounded-[22px] border transition hover:-translate-y-0.5 ${
                         isRecording
-                          ? "border-[#D9FF57]/44 bg-[#D9FF57]/18 text-[#F1FFB8] shadow-[0_0_0_10px_rgba(217,255,87,0.04),0_20px_44px_rgba(217,255,87,0.13)]"
+                          ? "zila-voice-breathing border-[#D9FF57]/44 bg-[#D9FF57]/18 text-[#F1FFB8] shadow-[0_0_0_10px_rgba(217,255,87,0.04),0_20px_44px_rgba(217,255,87,0.13)]"
                           : "border-[#D9FF57]/18 bg-[#D9FF57]/[0.075] text-[#F1FFB8] shadow-[0_0_0_10px_rgba(217,255,87,0.025),0_20px_44px_rgba(217,255,87,0.07)]"
                       }`}
                       aria-label={isRecording ? "Stop listening" : "Start voice input"}
                     >
-                      <span className="insight-signal-ripple absolute h-12 w-12 rounded-full bg-[#D9FF57]" />
+                      {isRecording ? <span className="insight-signal-ripple absolute h-12 w-12 rounded-full bg-[#D9FF57]" /> : null}
                       <span className="absolute inset-3 rounded-[18px] border border-white/10" />
                       {isRecording ? <Square className="relative h-9 w-9" strokeWidth={1.8} /> : <Mic className="relative h-10 w-10" strokeWidth={1.8} />}
                     </button>
@@ -1439,13 +1703,29 @@ export function AskZilaScreen() {
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-3 px-1 pb-2">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7EE7F6]">
-                          {isRecording ? "Listening..." : "Speak or type an operational change"}
+                          {voiceStatus === "recording"
+                            ? "Listening for operational update..."
+                            : voiceStatus === "processing"
+                              ? "Processing voice update"
+                              : voiceStatus === "sending"
+                                ? "Sending to Zila"
+                                : voiceStatus === "applied"
+                                  ? "Update applied"
+                                  : voiceStatus === "error"
+                                    ? "Could not process voice update"
+                                    : "Speak or type an operational change"}
                         </p>
+                        {isRecording ? (
+                          <span className="rounded-full border border-[#D9FF57]/18 bg-[#D9FF57]/[0.08] px-3 py-1 text-[11px] font-semibold text-[#EAFFB4]">
+                            {recordingSeconds}s
+                          </span>
+                        ) : null}
                         <div className="flex h-7 items-end gap-1.5">
                           {[13, 24, 18, 30, 20, 26, 15, 28, 17, 22].map((height, index) => (
                             <span
                               key={`${height}-${index}`}
-                              className={`w-1 rounded-full ${isRecording ? "bg-[#D9FF57] shadow-[0_0_8px_rgba(217,255,87,0.26)]" : "bg-[#D9FF57]/48"}`}
+                              className={`w-1 rounded-full ${isRecording ? "zila-voice-wave-bar bg-[#D9FF57] shadow-[0_0_8px_rgba(217,255,87,0.26)]" : "bg-[#D9FF57]/48"}`}
+                              data-wave-index={index}
                               style={{ height: `${isRecording ? height : Math.max(7, height * 0.42)}px` }}
                             />
                           ))}
@@ -1461,6 +1741,14 @@ export function AskZilaScreen() {
                         rows={2}
                         className="min-h-[82px] w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.06] px-4 py-3 text-[15px] leading-[1.6] text-white outline-none placeholder:text-[#8FA4C3] transition focus:border-[#D9FF57]/34 focus:bg-white/[0.075] focus:shadow-[0_0_0_3px_rgba(217,255,87,0.055)]"
                       />
+                      {voiceMessage && voiceStatus !== "recording" ? (
+                        <p className="mt-2 px-1 text-[12px] font-semibold text-[#D9FF57]">
+                          {voiceMessage.transcriptLabel}: voice update sent through the same Ask Zila engine.
+                        </p>
+                      ) : null}
+                      {voiceError ? (
+                        <p className="mt-2 px-1 text-[12px] font-semibold text-[#FFD6D6]">{voiceError}</p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1474,7 +1762,10 @@ export function AskZilaScreen() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => submitMessage(query)}
+                      onClick={() => {
+                        setVoiceMessage(null);
+                        submitMessage(query);
+                      }}
                       className="zila-operational-action-soft inline-flex h-12 items-center justify-center gap-2 rounded-[16px] bg-[#D9FF57] px-5 text-[14px] font-semibold text-[#102A4F] shadow-[0_14px_28px_rgba(217,255,87,0.14),0_0_18px_rgba(217,255,87,0.08),inset_0_1px_0_rgba(255,255,255,0.32)] transition hover:-translate-y-0.5 hover:bg-[#E5FF75] active:scale-[0.99]"
                     >
                       <Send className="h-[15px] w-[15px]" strokeWidth={2} />

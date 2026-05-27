@@ -1,0 +1,30 @@
+{
+  "name": "Zila",
+  "short_name": "Zila",
+  "description": "Operational coordination for projects, payments, approvals, and proof across borders.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#071526",
+  "theme_color": "#071526",
+  "icons": [
+    {
+      "src": "/logo-z.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-z.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/zila-logo-white.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -386,7 +386,7 @@ export function MakePaymentScreen() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          returnPath: "/payments/make-payment",
+          returnPath: "/payments/send",
         }),
       });
       const body = (await response.json()) as {
@@ -448,7 +448,7 @@ export function MakePaymentScreen() {
           project: paymentDraft.projectName,
           currency,
           issuer: currencyMode === "TOKEN" ? tokenIssuer.trim() : undefined,
-          returnPath: "/payments/make-payment",
+          returnPath: "/payments/send",
         }),
       });
       const body = (await response.json()) as {

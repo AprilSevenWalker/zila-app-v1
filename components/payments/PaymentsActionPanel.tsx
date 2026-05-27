@@ -5,7 +5,7 @@ import { ArrowUpRight, Building2, Landmark, Smartphone, WalletCards } from "luci
 
 export function PaymentsActionPanel() {
   const quickActions = [
-    { href: "/payments/choose-method", label: "Supplier payout", icon: Building2 },
+    { href: "/payments/send", label: "Supplier payout", icon: Building2 },
     { href: "/payments/mobile-money", label: "Mobile money", icon: Smartphone },
     { href: "/payments/stablecoin", label: "Stablecoin", icon: WalletCards },
     { href: "/payments/bank-transfer", label: "Bank transfer", icon: Landmark },
@@ -24,7 +24,7 @@ export function PaymentsActionPanel() {
         </div>
 
         <Link
-          href="/payments/choose-method"
+          href="/payments/send"
           className="zila-operational-action group inline-flex h-16 shrink-0 items-center justify-center gap-3 rounded-full bg-[#D9FF57] px-8 text-[15px] font-semibold text-[#102A4F] shadow-[0_18px_36px_rgba(217,255,87,0.18),0_0_28px_rgba(217,255,87,0.10),inset_0_1px_0_rgba(255,255,255,0.36)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#E5FF75] hover:shadow-[0_24px_48px_rgba(217,255,87,0.22),0_0_34px_rgba(217,255,87,0.14),inset_0_1px_0_rgba(255,255,255,0.42)] active:translate-y-0 active:scale-[0.99]"
         >
           <span>Prepare payment</span>
