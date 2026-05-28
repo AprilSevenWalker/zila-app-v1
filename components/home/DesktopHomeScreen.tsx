@@ -189,10 +189,9 @@ function HeroVisual() {
         fill
         unoptimized
         sizes="900px"
-        className="object-cover object-right opacity-[0.42] saturate-[1.02] contrast-[1.02] brightness-[1.12] [mask-image:linear-gradient(90deg,transparent_0%,transparent_52%,rgba(0,0,0,0.72)_70%,rgba(0,0,0,0.90)_100%)]"
+        className="object-cover object-right opacity-[0.42] saturate-[1.02] contrast-[1.02] brightness-[1.12] [mask-image:linear-gradient(90deg,transparent_0%,transparent_66%,rgba(0,0,0,0.34)_78%,rgba(0,0,0,0.90)_100%)] [-webkit-mask-image:linear-gradient(90deg,transparent_0%,transparent_66%,rgba(0,0,0,0.34)_78%,rgba(0,0,0,0.90)_100%)]"
       />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_72%_16%,rgba(255,255,255,0.18),transparent_32%),radial-gradient(ellipse_at_56%_2%,rgba(103,232,249,0.11),transparent_28%),linear-gradient(100deg,rgba(21,53,96,0.03)_0%,rgba(65,117,173,0.12)_58%,rgba(212,237,255,0.12)_100%)]" />
-      <div className="absolute right-[-14%] top-[10%] h-52 w-[66%] rounded-full bg-[rgba(255,255,255,0.12)] blur-3xl" />
       <div className="absolute right-[8%] top-[-8%] h-48 w-[50%] rounded-full bg-[rgba(103,232,249,0.09)] blur-3xl" />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-[linear-gradient(0deg,rgba(16,35,63,0.44),transparent)]" />
     </div>

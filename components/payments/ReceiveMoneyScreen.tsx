@@ -144,7 +144,7 @@ export function ReceiveMoneyScreen() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="overflow-hidden rounded-[34px] border border-white/32 bg-[linear-gradient(155deg,#2B5F94,#1E4A7D_48%,#17345F)] p-6 shadow-[0_34px_86px_rgba(31,68,116,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] md:p-8">
+            <section className="zila-readable-text overflow-hidden rounded-[34px] border border-white/32 bg-[linear-gradient(155deg,#2B5F94,#1E4A7D_48%,#17345F)] p-6 shadow-[0_34px_86px_rgba(31,68,116,0.28),inset_0_1px_0_rgba(255,255,255,0.22)] md:p-8">
               <div className="grid gap-7 md:grid-cols-[1fr_auto] md:items-start">
                 <div>
                   <div className="flex items-center gap-3">
@@ -157,16 +157,16 @@ export function ReceiveMoneyScreen() {
                     </div>
                   </div>
 
-                  <div className="mt-8 grid gap-3 sm:grid-cols-4">
+                  <div className="mt-8 grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
                     {[
                       ["Total balance", summary.totalBalance],
                       ["Protected money", summary.protectedAmount],
                       ["Available", Math.max(summary.totalBalance - summary.protectedAmount, 0)],
                       ["Safe to spend", summary.safeToSpend],
                     ].map(([label, value]) => (
-                      <div key={label as string} className="rounded-[20px] border border-white/14 bg-white/[0.10] px-4 py-4">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#C9DDF6]">{label}</p>
-                        <p className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-white">{formatCurrency(value as number)}</p>
+                      <div key={label as string} className="min-w-[150px] rounded-[20px] border border-white/14 bg-white/[0.10] px-4 py-4">
+                        <p className="text-[10px] font-semibold uppercase leading-[1.45] tracking-[0.16em] text-[#C9DDF6]">{label}</p>
+                        <p className="mt-2 whitespace-nowrap text-[20px] font-semibold tabular-nums tracking-[-0.04em] text-white sm:text-[21px]">{formatCurrency(value as number)}</p>
                       </div>
                     ))}
                   </div>

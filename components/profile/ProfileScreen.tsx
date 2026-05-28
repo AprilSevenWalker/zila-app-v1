@@ -7,6 +7,7 @@ import { BookOpen, Building2, CheckCircle2, Settings2, UserRound, Wallet } from 
 import { AppShell } from "@/components/ui/AppShell";
 import { openProductGuide } from "@/components/guide/ProductGuideModal";
 import { getMoneySourceState, subscribeToMoneySource, type MoneySourceState } from "@/lib/moneySourceStore";
+import { defaultDemoUser, getZilaUserProfile, subscribeToZilaSession, type ZilaUserProfile } from "@/lib/demoSession";
 
 interface ProfileState {
   businessName: string;
@@ -51,19 +52,23 @@ function InfoCard({
 export function ProfileScreen() {
   const [moneySource, setMoneySource] = useState<MoneySourceState>(getMoneySourceState);
   const [profileState, setProfileState] = useState<ProfileState>(getProfileState);
+  const [userProfile, setUserProfile] = useState<ZilaUserProfile>(defaultDemoUser);
 
   useEffect(() => {
     const sync = () => {
       setMoneySource(getMoneySourceState());
       setProfileState(getProfileState());
+      setUserProfile(getZilaUserProfile());
     };
 
     sync();
     const unsubscribe = subscribeToMoneySource(sync);
+    const unsubscribeSession = subscribeToZilaSession(sync);
     window.addEventListener("storage", sync);
 
     return () => {
       unsubscribe();
+      unsubscribeSession();
       window.removeEventListener("storage", sync);
     };
   }, []);
@@ -92,14 +97,14 @@ export function ProfileScreen() {
                     </span>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#AFC0FF]">Name</p>
-                      <p className="mt-1 text-[17px] font-semibold text-white">Kevin</p>
+                      <p className="mt-1 text-[17px] font-semibold text-white">{userProfile.name}</p>
                     </div>
                   </div>
                 </div>
                 <div className="rounded-[20px] border border-white/12 bg-white/[0.08] p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#AFC0FF]">Email</p>
-                  <p className="mt-2 text-[17px] font-semibold text-white">kevin@zila.demo</p>
-                  <p className="mt-1 text-[13px] text-[#C9D4F5]">Operations Lead</p>
+                  <p className="mt-2 text-[17px] font-semibold text-white">{userProfile.email}</p>
+                  <p className="mt-1 text-[13px] text-[#C9D4F5]">{userProfile.role}</p>
                 </div>
               </div>
             </InfoCard>

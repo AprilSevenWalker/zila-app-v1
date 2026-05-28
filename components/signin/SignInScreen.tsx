@@ -5,6 +5,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Check, Eye, LockKeyhole, Mail, MoreHorizontal, ShieldCheck } from "lucide-react";
+import { getAndClearAuthToast, startZilaSession } from "@/lib/demoSession";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -131,12 +132,19 @@ export function SignInScreen() {
   const [remember, setRemember] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [imagePanelMotion, setImagePanelMotion] = useState({ x: 0, y: 0 });
+  const [authToast, setAuthToast] = useState("");
 
   useEffect(() => {
     const savedEmail = window.localStorage.getItem("zila-auth-email");
+    const toast = getAndClearAuthToast();
 
     if (savedEmail) {
       setEmail(savedEmail);
+    }
+
+    if (toast) {
+      setAuthToast(toast);
+      window.setTimeout(() => setAuthToast(""), 3200);
     }
 
     return () => {
@@ -183,10 +191,7 @@ export function SignInScreen() {
       return;
     }
 
-    window.localStorage.setItem("zila-auth-email", email.trim());
-    window.localStorage.setItem("zila-auth-user-type", mode === "sign-up" ? "new" : "returning");
-    window.localStorage.setItem("zila-auth-mode", mode);
-    window.localStorage.setItem("zila-auth-remember", String(remember));
+    startZilaSession({ email: email.trim(), mode, remember });
 
     setIsLoading(true);
 
@@ -237,12 +242,21 @@ export function SignInScreen() {
             >
               <button
                 type="button"
-                onClick={() => router.push("/home")}
+                onClick={() => {
+                  startZilaSession({ email: "kevin@zila.demo", mode: "sign-in", remember: true });
+                  router.push("/home");
+                }}
                 className="inline-flex h-[52px] w-full items-center justify-center gap-3 rounded-[16px] border border-white/80 bg-white px-5 text-[14px] font-semibold text-[#101827] shadow-[0_20px_38px_rgba(2,6,23,0.18),0_0_24px_rgba(103,232,249,0.07),inset_0_1px_0_rgba(255,255,255,0.92)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_44px_rgba(2,6,23,0.22),0_0_30px_rgba(103,232,249,0.09),inset_0_1px_0_rgba(255,255,255,0.96)]"
               >
                 <GoogleMark />
                 Continue with Google
               </button>
+
+              {authToast ? (
+                <div className="rounded-[14px] border border-[#D9FF57]/20 bg-[#D9FF57]/[0.10] px-4 py-3 text-[12px] font-semibold text-[#EAFFB4]">
+                  {authToast}
+                </div>
+              ) : null}
 
               <div className="flex items-center gap-4">
                 <span className="h-px flex-1 bg-white/20" />

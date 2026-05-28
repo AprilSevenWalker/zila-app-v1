@@ -22,6 +22,7 @@ import { openProductGuide } from "@/components/guide/ProductGuideModal";
 import { ContextualBackNav } from "@/components/ui/ContextualBackNav";
 import { IconTile } from "@/components/ui/IconTile";
 import { OperationalWalletStatus } from "@/components/ui/OperationalWalletStatus";
+import { defaultDemoUser, getZilaUserProfile, subscribeToZilaSession, type ZilaUserProfile } from "@/lib/demoSession";
 import {
   getLatestPaymentTransaction,
   subscribeToLatestPaymentTransaction,
@@ -282,20 +283,25 @@ export function DesktopShell({ children }: DesktopShellProps) {
   const visibleNavItems = isHome ? homeNavItems : desktopNavItems;
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
   const [proofCount, setProofCount] = useState(0);
+  const [userProfile, setUserProfile] = useState<ZilaUserProfile>(defaultDemoUser);
   const syncState = useMemo(() => buildSyncState(latestPayment, proofCount), [latestPayment, proofCount]);
 
   useEffect(() => {
     const updatePayment = () => setLatestPayment(getLatestPaymentTransaction());
     const updateProof = () => setProofCount(getStoredProofTransactions().length);
+    const updateSession = () => setUserProfile(getZilaUserProfile());
 
     updatePayment();
     updateProof();
+    updateSession();
     const unsubscribePayment = subscribeToLatestPaymentTransaction(updatePayment);
     const unsubscribeProof = subscribeToProofTransactions(updateProof);
+    const unsubscribeSession = subscribeToZilaSession(updateSession);
 
     return () => {
       unsubscribePayment();
       unsubscribeProof();
+      unsubscribeSession();
     };
   }, []);
 
@@ -331,19 +337,23 @@ export function DesktopShell({ children }: DesktopShellProps) {
               </div>
 
               <div className="profile-section flex items-center gap-3 px-2">
-                <div className="relative h-12 w-12 overflow-hidden rounded-full border border-[#EAF1FF]/32 bg-[#14345F] shadow-[0_18px_34px_rgba(7,25,50,0.32),inset_0_1px_0_rgba(255,255,255,0.16)]">
-                  <Image
-                    src="/zila-profile-kevin.png"
-                    alt="Kevin Mwangi"
-                    fill
-                    unoptimized
-                    sizes="52px"
-                    className="object-cover object-center"
-                  />
+                <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-[#EAF1FF]/32 bg-[#14345F] text-[17px] font-semibold text-white shadow-[0_18px_34px_rgba(7,25,50,0.32),inset_0_1px_0_rgba(255,255,255,0.16)]">
+                  {userProfile.isDemo ? (
+                    <Image
+                      src="/zila-profile-kevin.png"
+                      alt={userProfile.fullName}
+                      fill
+                      unoptimized
+                      sizes="52px"
+                      className="object-cover object-center"
+                    />
+                  ) : (
+                    userProfile.name.charAt(0).toUpperCase()
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-[#F7F8FC]">Kevin Mwangi</p>
-                  <p className="mt-0.5 truncate text-[12px] font-medium text-[#D4E0F1]">Operations lead</p>
+                  <p className="truncate text-[14px] font-semibold text-[#F7F8FC]">{userProfile.fullName}</p>
+                  <p className="mt-0.5 truncate text-[12px] font-medium text-[#D4E0F1]">{userProfile.role}</p>
                 </div>
                 <ChevronDown className="h-[15px] w-[15px] text-[#D4E0F1]" strokeWidth={2} />
               </div>
@@ -475,7 +485,7 @@ export function DesktopShell({ children }: DesktopShellProps) {
                 </div>
                 <div className="text-center">
                   <p className="text-[12px] font-medium text-[#F3F8FF]">Good morning,</p>
-                  <p className="mt-1 text-[20px] font-semibold leading-none tracking-[-0.05em] text-[#F7F8FC]">Kevin</p>
+                  <p className="mt-1 text-[20px] font-semibold leading-none tracking-[-0.05em] text-[#F7F8FC]">{userProfile.name}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <OperationalWalletStatus compact />

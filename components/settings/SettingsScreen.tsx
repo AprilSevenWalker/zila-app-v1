@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   BadgeCheck,
@@ -31,6 +32,14 @@ import {
   subscribeToMoneySource,
   type MoneySourceState,
 } from "@/lib/moneySourceStore";
+import {
+  defaultDemoUser,
+  getZilaUserProfile,
+  resetZilaDemoData,
+  signOutZilaSession,
+  subscribeToZilaSession,
+  type ZilaUserProfile,
+} from "@/lib/demoSession";
 
 const demoWalletAddress = "rZilaDemo8u7J4d9KxXRPLMainnet5qP9m2";
 
@@ -112,6 +121,7 @@ function Field({
         {label}
       </span>
       <input
+        key={value}
         type={type}
         defaultValue={value}
         className="mt-2 h-8 w-full bg-transparent text-[15px] font-semibold text-white outline-none placeholder:text-[#8FA4C3]"
@@ -179,9 +189,12 @@ function CopyButton({ value, onCopied }: { value: string; onCopied: () => void }
 }
 
 export function SettingsScreen() {
+  const router = useRouter();
   const [moneySource, setMoneySource] = useState<MoneySourceState>(() => getMoneySourceState());
+  const [userProfile, setUserProfile] = useState<ZilaUserProfile>(defaultDemoUser);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [resetComplete, setResetComplete] = useState(false);
   const [walletDisconnected, setWalletDisconnected] = useState(false);
   const walletAddress = moneySource.walletAddress || demoWalletAddress;
   const walletLabel = moneySource.walletAddressShort || `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}`;
@@ -201,17 +214,24 @@ export function SettingsScreen() {
   useEffect(() => {
     const sync = () => {
       setMoneySource(getMoneySourceState());
+      setUserProfile(getZilaUserProfile());
       setWalletDisconnected(false);
     };
 
     sync();
-    return subscribeToMoneySource(sync);
+    const unsubscribeMoney = subscribeToMoneySource(sync);
+    const unsubscribeSession = subscribeToZilaSession(sync);
+
+    return () => {
+      unsubscribeMoney();
+      unsubscribeSession();
+    };
   }, []);
 
   const saveSettings = () => {
     window.localStorage.setItem("zila-settings-saved-at", new Date().toISOString());
-    window.localStorage.setItem("zila-settings-workspace", "Zila Operations");
-    window.localStorage.setItem("zila-business-name", "Zila Operations");
+    window.localStorage.setItem("zila-settings-workspace", userProfile.workspace);
+    window.localStorage.setItem("zila-business-name", userProfile.workspace);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2600);
   };
@@ -225,6 +245,20 @@ export function SettingsScreen() {
     setWalletDisconnected(false);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
+  };
+
+  const signOut = () => {
+    signOutZilaSession();
+    router.push("/login");
+  };
+
+  const resetDemo = () => {
+    resetZilaDemoData();
+    setMoneySource(getMoneySourceState());
+    setUserProfile(getZilaUserProfile());
+    setWalletDisconnected(false);
+    setResetComplete(true);
+    window.setTimeout(() => setResetComplete(false), 3200);
   };
 
   return (
@@ -244,7 +278,7 @@ export function SettingsScreen() {
               <div className="rounded-[20px] border border-[#D9FF57]/16 bg-[#D9FF57]/[0.075] px-4 py-3">
                 <p className="flex items-center gap-2 text-[12px] font-semibold text-[#EAFFB4]">
                   <span className="zila-live-dot h-2 w-2 rounded-full bg-[#D9FF57]" />
-                  Kevin workspace active
+                  {userProfile.name} workspace active
                 </p>
                 <p className="mt-1 text-[12px] text-[#C9D4F5]">Business settings saved locally for demo.</p>
               </div>
@@ -257,7 +291,7 @@ export function SettingsScreen() {
                 <div className="grid gap-4 xl:grid-cols-[180px_minmax(0,1fr)]">
                   <div className="rounded-[22px] border border-white/10 bg-white/[0.055] p-4">
                     <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] border border-[#67E8F9]/18 bg-[linear-gradient(145deg,#1D4ED8,#102A4F)] text-[34px] font-semibold text-white shadow-[0_18px_38px_rgba(29,78,216,0.18)]">
-                      K
+                      {userProfile.name.charAt(0).toUpperCase()}
                     </div>
                     <p className="mt-4 text-center text-[12px] font-semibold text-[#D7E3F8]">Profile photo</p>
                     <button type="button" className="mt-3 h-10 w-full rounded-full border border-white/10 bg-white/[0.055] text-[12px] font-semibold text-[#D7E3F8] transition hover:border-[#D9FF57]/16 hover:text-white">
@@ -265,10 +299,10 @@ export function SettingsScreen() {
                     </button>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Full name" value="Kevin" icon={UserRound} />
-                    <Field label="Email address" value="kevin@zila.demo" icon={Mail} type="email" />
-                    <Field label="Role" value="Operations Lead" icon={ShieldCheck} />
-                    <Field label="Business/workspace name" value="Zila Operations" icon={Building2} />
+                    <Field label="Full name" value={userProfile.name} icon={UserRound} />
+                    <Field label="Email address" value={userProfile.email} icon={Mail} type="email" />
+                    <Field label="Role" value={userProfile.role} icon={ShieldCheck} />
+                    <Field label="Business/workspace name" value={userProfile.workspace} icon={Building2} />
                   </div>
                 </div>
               </SectionCard>
@@ -415,10 +449,24 @@ export function SettingsScreen() {
                     <Globe2 className="h-4 w-4" strokeWidth={2} />
                     Back to dashboard
                   </Link>
+                  <button type="button" onClick={resetDemo} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-[#67E8F9]/16 bg-[#67E8F9]/[0.07] px-5 text-[13px] font-semibold text-[#DDFBFF] transition hover:border-[#67E8F9]/26 hover:bg-[#67E8F9]/[0.10]">
+                    <RefreshCw className="h-4 w-4" strokeWidth={2} />
+                    Reset demo data
+                  </button>
+                  <button type="button" onClick={signOut} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-white/12 bg-white/[0.055] px-5 text-[13px] font-semibold text-[#D7E3F8] transition hover:border-[#D9FF57]/16 hover:text-white">
+                    <LogOut className="h-4 w-4" strokeWidth={2} />
+                    Sign out
+                  </button>
                   {saved ? (
                     <div className="flex items-center gap-2 rounded-[16px] border border-[#D9FF57]/14 bg-[#D9FF57]/[0.07] px-3 py-3 text-[12px] font-semibold text-[#EAFFB4]">
                       <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
                       Settings saved.
+                    </div>
+                  ) : null}
+                  {resetComplete ? (
+                    <div className="flex items-center gap-2 rounded-[16px] border border-[#67E8F9]/14 bg-[#67E8F9]/[0.07] px-3 py-3 text-[12px] font-semibold text-[#DDFBFF]">
+                      <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+                      Demo data reset.
                     </div>
                   ) : null}
                 </div>
