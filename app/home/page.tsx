@@ -14,11 +14,11 @@ export default function HomePage() {
   return (
     <AppShell>
       <div className="lg:hidden">
-        <div className="space-y-4">
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3">
+        <div className="space-y-3">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-4 px-1 pt-1">
               <GreetingSection />
-              <div className="pt-2">
+              <div className="shrink-0 pt-1">
                 <QuickUpdateMenu variant="icon" align="right" />
               </div>
             </div>

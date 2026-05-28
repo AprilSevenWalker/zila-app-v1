@@ -278,20 +278,24 @@ export default function PaymentsPage() {
             <div className="pointer-events-none absolute bottom-[18%] left-[16%] right-[18%] hidden h-px bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(217,255,87,0.22),rgba(255,255,255,0))] lg:block" />
 
             <div className="relative z-10">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 md:mb-4">
                 <div>
                   <p className="text-[12px] font-semibold uppercase tracking-[0.2em] text-[#7EE7F6]">Payments</p>
-                  <p className="mt-1.5 max-w-[560px] text-[14px] leading-[1.55] text-[#D7E3F8]">
+                  <p className="mt-1.5 max-w-[560px] text-[13px] leading-[1.45] text-[#D7E3F8] md:text-[14px] md:leading-[1.55]">
                     Coordinate supplier payouts, reserves, and settlement across connected rails.
                   </p>
                 </div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-[#D9FF57]/24 bg-[#D9FF57]/12 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#EAFFB4]">
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#D9FF57]/24 bg-[#D9FF57]/12 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#EAFFB4] md:px-3 md:py-2 md:text-[11px] md:tracking-[0.14em]">
                   <span className="zila-live-dot h-2 w-2 rounded-full bg-[#D9FF57]" />
                   System Active
                 </span>
               </div>
 
-              <div className="mb-5 grid gap-2 lg:grid-cols-4">
+              <div className="mb-4 md:hidden">
+                <PaymentsActionPanel />
+              </div>
+
+              <div className="mb-5 hidden gap-2 md:grid lg:grid-cols-4">
                 {liveOperationalInsights.map((insight, index) => (
                   <div key={insight} className={`rounded-[16px] border px-4 py-3 text-[12px] font-medium leading-[1.45] text-[#E7EEFF] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition duration-200 hover:border-white/18 hover:bg-white/[0.085] ${
                     latestPayment && index === 0 ? "zila-recalc-pulse border-[#D9FF57]/20 bg-[#D9FF57]/[0.07]" : "border-white/12 bg-white/[0.065]"
@@ -302,7 +306,7 @@ export default function PaymentsPage() {
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[minmax(320px,1.1fr)_minmax(220px,0.72fr)_minmax(220px,0.72fr)]">
-                <section className="rounded-[30px] border border-white/30 bg-[linear-gradient(180deg,rgba(28,73,121,0.96),rgba(13,35,68,0.98))] p-6 shadow-[0_24px_56px_rgba(13,35,68,0.30),inset_0_1px_0_rgba(255,255,255,0.16)]">
+                <section className="rounded-[30px] border border-white/30 bg-[linear-gradient(180deg,rgba(28,73,121,0.96),rgba(13,35,68,0.98))] p-4 shadow-[0_24px_56px_rgba(13,35,68,0.30),inset_0_1px_0_rgba(255,255,255,0.16)] md:p-6">
                   <div className="flex items-start gap-3">
                     <IconTile size="md" glow="cyan" className="flex-shrink-0 border-white/12 bg-white/10 text-white/95">
                       <WalletCards className="h-[18px] w-[18px]" strokeWidth={2} />
@@ -313,7 +317,7 @@ export default function PaymentsPage() {
                         <div className="absolute left-[-1.5rem] top-1/2 h-24 w-52 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.22),rgba(59,130,246,0.14)_42%,rgba(59,130,246,0)_74%)] blur-2xl opacity-80" />
                         <CurrencyAmount
                           amount={overview.totalAvailable}
-                          primaryClassName="relative text-[46px] font-semibold leading-none tracking-[-0.075em] text-transparent bg-[linear-gradient(90deg,#7EE7F6_0%,#67E8F9_34%,#93C5FD_68%,#C4B5FD_100%)] bg-clip-text [text-shadow:0_0_24px_rgba(34,211,238,0.14)]"
+                          primaryClassName="relative text-[36px] md:text-[46px] font-semibold leading-none tracking-[-0.075em] text-transparent bg-[linear-gradient(90deg,#7EE7F6_0%,#67E8F9_34%,#93C5FD_68%,#C4B5FD_100%)] bg-clip-text [text-shadow:0_0_24px_rgba(34,211,238,0.14)]"
                           secondaryClassName="mt-2 text-[14px] font-medium tracking-[0.02em] text-[#9EC5E8]"
                         />
                       </div>
@@ -357,7 +361,7 @@ export default function PaymentsPage() {
                 </div>
               </div>
 
-              <div className="my-7 md:my-8">
+              <div className="my-7 hidden md:block md:my-8">
                 <PaymentsActionPanel />
               </div>
 
