@@ -5,10 +5,13 @@ import { BarChart3, LockKeyhole, Plus, ShieldCheck, TrendingUp, X } from "lucide
 
 import { IconTile } from "@/components/ui/IconTile";
 import {
+  BASE_PROTECTED,
+  COMMITTED,
   createReserve,
   getProtectedMoneySummary,
   releaseReserveAmount,
   subscribeToProtectedMoney,
+  TOTAL_BALANCE,
   type ReserveCategory,
 } from "@/lib/protectedMoneyStore";
 import { subscribeToLatestPaymentTransaction } from "@/lib/paymentTransactionStore";
@@ -29,8 +32,21 @@ function formatCurrency(amount: number) {
   return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
+type ProtectedMoneySummary = ReturnType<typeof getProtectedMoneySummary>;
+
+function getInitialProtectedMoneySummary(): ProtectedMoneySummary {
+  return {
+    reserves: [],
+    activity: [],
+    totalBalance: TOTAL_BALANCE,
+    protectedAmount: BASE_PROTECTED,
+    committedAmount: COMMITTED,
+    safeToSpend: Math.max(TOTAL_BALANCE - BASE_PROTECTED - COMMITTED, 0),
+  };
+}
+
 export const CapitalCard: React.FC = () => {
-  const [summary, setSummary] = useState(getProtectedMoneySummary);
+  const [summary, setSummary] = useState(getInitialProtectedMoneySummary);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [reserveName, setReserveName] = useState("");
   const [amount, setAmount] = useState("");
