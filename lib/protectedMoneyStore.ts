@@ -54,6 +54,10 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
+function isDemoWorkspace() {
+  return isBrowser() && window.localStorage.getItem("zila-demo-mode") === "true";
+}
+
 function defaultState(): ProtectedMoneyState {
   return {
     reserves: [],
@@ -122,15 +126,18 @@ function buildInsight(category: ReserveCategory, reserveName: string, linkedProj
 }
 
 function calculateSummaryWithReserves(reserves: ProtectedReserve[]) {
-  const totalBalance = TOTAL_BALANCE + getIncomingTotal() - getOutgoingPaymentTotal();
+  const baseBalance = isDemoWorkspace() ? TOTAL_BALANCE : 0;
+  const baseProtected = isDemoWorkspace() ? BASE_PROTECTED : 0;
+  const baseCommitted = isDemoWorkspace() ? COMMITTED : 0;
+  const totalBalance = baseBalance + getIncomingTotal() - getOutgoingPaymentTotal();
   const extraProtected = reserves.reduce((total, reserve) => total + reserve.amount, 0);
-  const protectedAmount = BASE_PROTECTED + extraProtected;
-  const safeToSpend = Math.max(totalBalance - protectedAmount - COMMITTED, 0);
+  const protectedAmount = baseProtected + extraProtected;
+  const safeToSpend = Math.max(totalBalance - protectedAmount - baseCommitted, 0);
 
   return {
     totalBalance,
     protectedAmount,
-    committedAmount: COMMITTED,
+    committedAmount: baseCommitted,
     safeToSpend,
   };
 }

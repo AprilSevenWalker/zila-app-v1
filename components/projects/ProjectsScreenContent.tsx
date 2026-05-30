@@ -463,7 +463,6 @@ function ProjectRailTile({
   latestPayment: LatestPaymentTransaction | null;
   isDuplicate?: boolean;
 }) {
-  const operations = getProjectOperations(project);
   const pressure = project.statusTone === "warning";
   const paymentSynced = paymentMatchesProject(latestPayment, project);
   const confidence = getOperationalConfidence(project, paymentSynced, latestPayment);
@@ -714,7 +713,7 @@ function PortfolioIntelligencePanel({
 export function ProjectsScreenContent({ projects }: { projects: Project[] }) {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
-  const [visibleProjects, setVisibleProjects] = useState(() => mergeOperationalProjects(projects));
+  const [visibleProjects, setVisibleProjects] = useState<Project[]>([]);
   const attentionProjects = visibleProjects.filter((project) => project.statusTone === "warning").slice(0, 2);
   const healthyCount = visibleProjects.filter((project) => project.statusTone === "success").length;
   const pressureCount = visibleProjects.filter((project) => project.statusTone === "warning").length;

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, FolderKanban, ShieldCheck } from "lucide-react";
 
-import { projects } from "@/data/projects";
+import { projects, type Project } from "@/data/projects";
 import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
 
 const actionByTone = {
@@ -50,7 +50,7 @@ const stateStyles = {
 };
 
 export function ProjectCarousel() {
-  const [visibleProjects, setVisibleProjects] = useState(() => mergeOperationalProjects(projects));
+  const [visibleProjects, setVisibleProjects] = useState<Project[]>([]);
 
   useEffect(() => {
     const update = () => setVisibleProjects(mergeOperationalProjects(projects));
@@ -73,6 +73,12 @@ export function ProjectCarousel() {
       </div>
 
       <div className="-mx-4 flex snap-x scroll-px-4 gap-4 overflow-x-auto overflow-y-visible px-4 pb-3 pt-1 scroll-smooth [scrollbar-width:none] md:mx-0 md:px-1 [&::-webkit-scrollbar]:hidden">
+        {visibleProjects.length === 0 ? (
+          <div className="w-full rounded-[24px] border border-white/16 bg-[#102A4F]/58 p-5 text-[#EAF1FF] shadow-[0_18px_38px_rgba(1,8,20,0.22),inset_0_1px_0_rgba(255,255,255,0.08)]">
+            <p className="text-[15px] font-semibold">No projects yet</p>
+            <p className="mt-2 text-[13px] leading-[1.55] text-[#C9D4F5]">Create projects during onboarding or add one from Projects to start tracking obligations.</p>
+          </div>
+        ) : null}
         {visibleProjects.map((project) => {
           const style = stateStyles[project.statusTone];
           const isDark = project.statusTone === "warning" || project.statusTone === "info";

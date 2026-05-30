@@ -1,4 +1,3 @@
-import { QuickUpdateMenu } from "@/components/actions/QuickUpdateMenu";
 import { GreetingSection } from "@/components/home/GreetingSection";
 import { CapitalCard } from "@/components/home/CapitalCard";
 import { HomeCommandBar } from "@/components/home/HomeCommandBar";
@@ -7,6 +6,7 @@ import { AttentionPanel } from "@/components/home/AttentionPanel";
 import { ActiveFocusCard } from "@/components/home/ActiveFocusCard";
 import { BusinessList } from "@/components/home/BusinessList";
 import { DesktopHomeScreen } from "@/components/home/DesktopHomeScreen";
+import { MobilePrimaryActions } from "@/components/home/MobilePrimaryActions";
 import { ProjectCarousel } from "@/components/home/ProjectCarousel";
 import { AppShell } from "@/components/ui/AppShell";
 
@@ -16,23 +16,20 @@ export default function HomePage() {
       <div className="lg:hidden">
         <div className="space-y-3">
           <div className="space-y-3">
-            <div className="flex items-start justify-between gap-4 px-1 pt-1">
+            <div className="px-1 pt-2">
               <GreetingSection />
-              <div className="shrink-0 pt-1">
-                <QuickUpdateMenu variant="icon" align="right" />
-              </div>
             </div>
 
-            <div className="opacity-[0.95]">
-              <HomeCommandBar />
-            </div>
-
-            <div className="mt-4 md:mt-0">
+            <div className="pt-2">
               <CapitalCard />
             </div>
 
             <div className="opacity-[0.97]">
-              <AttentionPanel />
+              <ProjectCarousel />
+            </div>
+
+            <div className="opacity-[0.98]">
+              <MobilePrimaryActions />
             </div>
 
             <div className="opacity-[0.97]">
@@ -40,7 +37,7 @@ export default function HomePage() {
             </div>
 
             <div className="opacity-[0.97]">
-              <ProjectCarousel />
+              <AttentionPanel />
             </div>
 
             <div className="space-y-4 pt-1">
@@ -50,6 +47,10 @@ export default function HomePage() {
 
               <div className="opacity-[0.94]">
                 <InsightCard />
+              </div>
+
+              <div className="pt-1 opacity-[0.95]">
+                <HomeCommandBar />
               </div>
             </div>
           </div>

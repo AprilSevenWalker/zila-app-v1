@@ -27,7 +27,13 @@ import {
   type PaymentMovementRecord,
 } from "@/lib/paymentTransactionStore";
 import { getStoredOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
-import { getProtectedMoneySummary, subscribeToProtectedMoney } from "@/lib/protectedMoneyStore";
+import {
+  BASE_PROTECTED,
+  COMMITTED,
+  getProtectedMoneySummary,
+  subscribeToProtectedMoney,
+  TOTAL_BALANCE,
+} from "@/lib/protectedMoneyStore";
 
 const suggestionChips = ["Supplier payout ready", "Reserve protected"];
 
@@ -82,6 +88,19 @@ const defaultRecentActivity = [
 
 function formatCurrency(amount: number) {
   return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+type ProtectedMoneySummary = ReturnType<typeof getProtectedMoneySummary>;
+
+function getInitialProtectedMoneySummary(): ProtectedMoneySummary {
+  return {
+    reserves: [],
+    activity: [],
+    totalBalance: TOTAL_BALANCE,
+    protectedAmount: BASE_PROTECTED,
+    committedAmount: COMMITTED,
+    safeToSpend: Math.max(TOTAL_BALANCE - BASE_PROTECTED - COMMITTED, 0),
+  };
 }
 
 function formatActivityTime(value: string) {
@@ -201,8 +220,8 @@ function HeroVisual() {
 export function DesktopHomeScreen() {
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
   const [paymentHistory, setPaymentHistory] = useState<PaymentMovementRecord[]>([]);
-  const [moneySummary, setMoneySummary] = useState(getProtectedMoneySummary);
-  const [storedProjects, setStoredProjects] = useState(() => getStoredOperationalProjects());
+  const [moneySummary, setMoneySummary] = useState(getInitialProtectedMoneySummary);
+  const [storedProjects, setStoredProjects] = useState<ReturnType<typeof getStoredOperationalProjects>>([]);
   const displayActivity = useMemo(() => {
     if (latestPayment) {
       return [

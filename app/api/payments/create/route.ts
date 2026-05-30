@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isValidClassicAddress } from "xrpl";
 
+import { getAppOriginForRequest } from "@/lib/appUrl";
 import { createPaymentPayload } from "@/lib/xaman";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
     | null = null;
 
   try {
-    const origin = new URL(request.url).origin;
+    const origin = getAppOriginForRequest(request.url);
     const body = (await request.json()) as {
       supplierName?: string;
       amount?: string | number;

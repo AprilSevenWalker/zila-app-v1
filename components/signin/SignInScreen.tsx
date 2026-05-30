@@ -4,8 +4,8 @@ import type { CSSProperties, MouseEvent } from "react";
 import { startTransition, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, Eye, LockKeyhole, Mail, MoreHorizontal, ShieldCheck } from "lucide-react";
-import { getAndClearAuthToast, startZilaSession } from "@/lib/demoSession";
+import { ArrowRight, Check, Eye, Mail, MoreHorizontal, ShieldCheck } from "lucide-react";
+import { getAndClearAuthToast, startZilaDemoSession, startZilaSession } from "@/lib/demoSession";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -127,23 +127,16 @@ export function SignInScreen() {
   const router = useRouter();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mode, setMode] = useState<AuthMode>("sign-in");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState(() => (typeof window !== "undefined" ? window.localStorage.getItem("zila-auth-email") || "" : ""));
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [imagePanelMotion, setImagePanelMotion] = useState({ x: 0, y: 0 });
-  const [authToast, setAuthToast] = useState("");
+  const [authToast, setAuthToast] = useState(() => (typeof window !== "undefined" ? getAndClearAuthToast() : ""));
 
   useEffect(() => {
-    const savedEmail = window.localStorage.getItem("zila-auth-email");
-    const toast = getAndClearAuthToast();
-
-    if (savedEmail) {
-      setEmail(savedEmail);
-    }
-
-    if (toast) {
-      setAuthToast(toast);
+    if (authToast) {
       window.setTimeout(() => setAuthToast(""), 3200);
     }
 
@@ -152,9 +145,9 @@ export function SignInScreen() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, []);
+  }, [authToast]);
 
-  const canContinue = email.trim().length > 0 && password.trim().length > 0;
+  const canContinue = email.trim().length > 0 && password.trim().length > 0 && (mode === "sign-in" || name.trim().length > 0);
   const imagePanelStyle = {
     "--zila-auth-parallax-x": `${imagePanelMotion.x}px`,
     "--zila-auth-parallax-y": `${imagePanelMotion.y}px`,
@@ -191,7 +184,7 @@ export function SignInScreen() {
       return;
     }
 
-    startZilaSession({ email: email.trim(), mode, remember });
+    startZilaSession({ email: email.trim(), mode, remember, name });
 
     setIsLoading(true);
 
@@ -229,7 +222,9 @@ export function SignInScreen() {
                 {mode === "sign-in" ? "Welcome back" : "Create account"}
               </h1>
               <p className="mt-3 max-w-[320px] text-[15px] font-medium leading-[1.58] text-[#DCE7FF]/82">
-                Sign in to coordinate projects, payouts, reserves, and proof records in real time.
+                {mode === "sign-in"
+                  ? "Sign in to coordinate projects, payouts, reserves, and proof records in real time."
+                  : "Create a real workspace for your business. Demo data stays separate."}
               </p>
             </div>
 
@@ -242,10 +237,6 @@ export function SignInScreen() {
             >
               <button
                 type="button"
-                onClick={() => {
-                  startZilaSession({ email: "kevin@zila.demo", mode: "sign-in", remember: true });
-                  router.push("/home");
-                }}
                 className="inline-flex h-[52px] w-full items-center justify-center gap-3 rounded-[16px] border border-white/80 bg-white px-5 text-[14px] font-semibold text-[#101827] shadow-[0_20px_38px_rgba(2,6,23,0.18),0_0_24px_rgba(103,232,249,0.07),inset_0_1px_0_rgba(255,255,255,0.92)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_44px_rgba(2,6,23,0.22),0_0_30px_rgba(103,232,249,0.09),inset_0_1px_0_rgba(255,255,255,0.96)]"
               >
                 <GoogleMark />
@@ -265,6 +256,23 @@ export function SignInScreen() {
               </div>
 
               <div className="space-y-2">
+                {mode === "sign-up" ? (
+                  <label htmlFor="full-name" className="block text-[12px] font-semibold text-white">
+                    Name
+                  </label>
+                ) : null}
+                {mode === "sign-up" ? (
+                  <input
+                    id="full-name"
+                    type="text"
+                    autoComplete="name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Your name"
+                    disabled={isLoading}
+                    className="mb-4 h-[52px] w-full rounded-[16px] border border-white/20 bg-white/[0.065] px-4 text-[14px] font-medium text-white shadow-[0_14px_28px_rgba(2,6,23,0.10),inset_0_1px_0_rgba(255,255,255,0.14)] outline-none backdrop-blur-sm transition placeholder:text-white/58 focus:border-[#D9FF57]/38 focus:bg-white/[0.10] disabled:cursor-wait disabled:opacity-80"
+                  />
+                ) : null}
                 <label htmlFor="email-address" className="block text-[12px] font-semibold text-white">
                   Email address
                 </label>
@@ -328,6 +336,17 @@ export function SignInScreen() {
               >
                 {isLoading ? "Securing workspace" : mode === "sign-in" ? "Sign in" : "Create account"}
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" strokeWidth={2.2} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  startZilaDemoSession();
+                  router.push("/home");
+                }}
+                className="inline-flex h-[48px] w-full items-center justify-center rounded-[16px] border border-white/18 bg-white/[0.08] px-5 text-[13px] font-semibold text-[#F3F8FF] transition hover:bg-white/[0.12]"
+              >
+                Explore Demo Workspace
               </button>
             </form>
 

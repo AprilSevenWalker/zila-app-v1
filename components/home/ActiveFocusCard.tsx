@@ -1,7 +1,28 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { ArrowRight, FolderKanban, ShieldCheck } from "lucide-react";
 
+import { projects as seedProjects, type Project } from "@/data/projects";
+import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
+
 export function ActiveFocusCard() {
+  const [focusProject, setFocusProject] = useState<Project | null>(null);
+
+  useEffect(() => {
+    const update = () => setFocusProject(mergeOperationalProjects(seedProjects)[0] ?? null);
+    update();
+    return subscribeToOperationalProjects(update);
+  }, []);
+
+  if (!focusProject) {
+    return null;
+  }
+
+  const projectHref = `/projects/${focusProject.id}`;
+  const actionLabel = focusProject.statusTone === "warning" ? "Coordinate payout" : "Review project";
+
   return (
     <section className="zila-card-hover rounded-[28px] border border-white/22 bg-[linear-gradient(180deg,#214F83,#173D6D_50%,#102A4F)] p-5 shadow-[0_28px_68px_rgba(31,68,116,0.24),inset_0_1px_0_rgba(234,241,255,0.14)] backdrop-blur-xl">
       <div className="flex items-start justify-between gap-4">
@@ -12,8 +33,8 @@ export function ActiveFocusCard() {
               <FolderKanban className="h-[18px] w-[18px]" strokeWidth={1.9} />
             </span>
             <div>
-              <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-[#EAF1FF]">Project Horizon</h2>
-              <p className="mt-1 text-[13px] font-medium text-[#C9D4F5]">Supplier payment due Friday</p>
+              <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-[#EAF1FF]">{focusProject.name}</h2>
+              <p className="mt-1 text-[13px] font-medium text-[#C9D4F5]">{focusProject.nextMilestone}</p>
             </div>
           </div>
         </div>
@@ -23,15 +44,15 @@ export function ActiveFocusCard() {
       </div>
 
       <div className="mt-5 rounded-[20px] border border-white/14 bg-[#102A4F]/50 px-4 py-4 shadow-[0_14px_28px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(234,241,255,0.10)]">
-        <p className="text-[18px] font-semibold tracking-[-0.035em] text-[#EAF1FF]">$4,300 needs resolving this week</p>
+        <p className="text-[18px] font-semibold tracking-[-0.035em] text-[#EAF1FF]">{focusProject.cashNeeded} needs attention</p>
         <p className="mt-2 text-[13px] leading-[1.6] text-[#C9D4F5]">
-          This project is approaching pressure due to upcoming commitments.
+          {focusProject.financialImpact}
         </p>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2.5">
         <Link
-          href="/projects/harbour-road"
+          href={projectHref}
           className="inline-flex items-center justify-center gap-2 rounded-full bg-[#1D4ED8] px-4 py-2.5 text-[12px] font-semibold text-white shadow-[0_14px_28px_rgba(29,78,216,0.18)] transition hover:opacity-90"
         >
           Review project
@@ -41,7 +62,7 @@ export function ActiveFocusCard() {
           href="/payments/send"
           className="inline-flex items-center justify-center rounded-full border border-white/14 bg-white/[0.10] px-4 py-2.5 text-[12px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.14]"
         >
-          Coordinate payout
+          {actionLabel}
         </Link>
         <Link
           href="/move-funds"

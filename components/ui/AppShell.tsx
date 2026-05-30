@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CreditCard, FolderKanban, Home, Menu, MessageSquareText, Settings, ShieldCheck, X } from "lucide-react";
@@ -9,7 +10,6 @@ import { CreditCard, FolderKanban, Home, Menu, MessageSquareText, Settings, Shie
 import { BottomNavigation } from "@/components/ui/BottomNavigation";
 import { ContextualBackNav } from "@/components/ui/ContextualBackNav";
 import { DesktopShell } from "@/components/ui/DesktopShell";
-import { TopBar } from "@/components/home/TopBar";
 import { ProductGuideModal } from "@/components/guide/ProductGuideModal";
 
 interface AppShellProps {
@@ -33,7 +33,7 @@ export function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen w-full bg-[#06101F] text-[#EAF1FF]">
       <div className="lg:hidden">
         <div className="zila-atmosphere mx-auto min-h-[100dvh] w-full max-w-[760px] bg-[#06101F]">
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[#7CF3FF]/12 bg-[#06101F]/92 px-4 py-3 backdrop-blur-md">
+          <div className="sticky top-0 z-30 grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-white/18 bg-[linear-gradient(135deg,rgba(33,79,131,0.96),rgba(23,61,109,0.94)_48%,rgba(16,42,79,0.96))] px-4 py-3 shadow-[0_14px_34px_rgba(1,8,20,0.22),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-md">
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
@@ -42,17 +42,24 @@ export function AppShell({ children }: AppShellProps) {
             >
               <Menu className="h-5 w-5" strokeWidth={2} />
             </button>
-            <Link href="/home" className="text-[13px] font-semibold uppercase tracking-[0.2em] text-[#EAF1FF]">
-              Zila
+            <Link href="/home" className="justify-self-center" aria-label="Zila home">
+              <Image
+                src="/zila-logo-white.png"
+                alt="Zila"
+                width={96}
+                height={32}
+                priority
+                unoptimized
+                className="h-auto w-[84px] object-contain drop-shadow-[0_10px_22px_rgba(1,8,20,0.24)]"
+              />
             </Link>
             <Link
-              href="/proof"
-              className="rounded-full border border-[#D7FF4F]/22 bg-[#D7FF4F]/10 px-3 py-2 text-[11px] font-semibold text-[#F1FFB8]"
+              href="/payments/send"
+              className="rounded-full border border-[#D9FF57]/30 bg-[#D9FF57] px-3.5 py-2 text-[11px] font-semibold text-[#06101F] shadow-[0_12px_24px_rgba(217,255,87,0.18),inset_0_1px_0_rgba(255,255,255,0.28)]"
             >
-              Proof
+              Send Payment
             </Link>
           </div>
-          <TopBar />
           <main className="zila-safe-bottom-lg min-w-0 px-4 pt-2 sm:px-5">
             <ContextualBackNav className="mb-3" />
             {children}

@@ -7,6 +7,10 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
+function isDemoWorkspace() {
+  return isBrowser() && window.localStorage.getItem("zila-demo-mode") === "true";
+}
+
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project";
 }
@@ -53,7 +57,7 @@ function makeProject(input: {
     progress: 24,
     dueLabel: "New project live",
     cashNeeded: "$0",
-    nextMilestone: "Connect first payout or reserve movement",
+    nextMilestone: input.template ? `${input.template} workspace ready` : "Connect first payout or reserve movement",
     owner: "Operations",
     verifiedDays: 1,
     updatedAt: "Created just now",
@@ -145,10 +149,52 @@ export function getStoredOperationalProjects() {
 
 export function mergeOperationalProjects(seedProjects: Project[]) {
   const stored = getStoredOperationalProjects();
+  if (!isDemoWorkspace()) {
+    return stored;
+  }
+
   const seedNames = new Set(seedProjects.map((project) => project.name.toLowerCase()));
   const freshStored = stored.filter((project) => !seedNames.has(project.name.toLowerCase()));
 
   return [...freshStored, ...seedProjects];
+}
+
+export function saveOnboardingProjects(input: Array<{ name: string; description?: string }>) {
+  if (!isBrowser()) {
+    return [];
+  }
+
+  const projects = input
+    .map((project, index) => ({
+      name: project.name.trim(),
+      description: project.description?.trim() || "",
+      index,
+    }))
+    .filter((project) => project.name.length > 0)
+    .map((project) => {
+      const budget = 12000 + project.index * 4500;
+      return {
+        ...makeProject({
+          id: `project-${slugify(project.name)}`,
+          name: project.name,
+          budget,
+          template: project.description || "User project",
+          protectedTotal: 0,
+          safeToSpend: budget,
+        }),
+        summary: project.description || `${project.name} is ready for payment coordination and operating memory.`,
+        nextMilestone: "Add first payment, supplier update, or approval",
+        cashNeeded: "$0",
+        remaining: currency(budget),
+        status: "Live",
+        statusTone: "success" as const,
+        zilaSays: "Record the first payment, supplier update, or approval to build this project's operational memory.",
+      };
+    });
+
+  window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  window.dispatchEvent(new CustomEvent(UPDATE_EVENT, { detail: projects }));
+  return projects;
 }
 
 export function getOperationalProjectById(seedProjects: Project[], id: string) {

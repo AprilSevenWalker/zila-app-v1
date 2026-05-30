@@ -22,7 +22,7 @@ import { openProductGuide } from "@/components/guide/ProductGuideModal";
 import { ContextualBackNav } from "@/components/ui/ContextualBackNav";
 import { IconTile } from "@/components/ui/IconTile";
 import { OperationalWalletStatus } from "@/components/ui/OperationalWalletStatus";
-import { defaultDemoUser, getZilaUserProfile, subscribeToZilaSession, type ZilaUserProfile } from "@/lib/demoSession";
+import { defaultUserProfile, getZilaAvatarDataUrl, getZilaUserProfile, subscribeToZilaSession, type ZilaUserProfile } from "@/lib/demoSession";
 import {
   getLatestPaymentTransaction,
   subscribeToLatestPaymentTransaction,
@@ -283,13 +283,17 @@ export function DesktopShell({ children }: DesktopShellProps) {
   const visibleNavItems = isHome ? homeNavItems : desktopNavItems;
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
   const [proofCount, setProofCount] = useState(0);
-  const [userProfile, setUserProfile] = useState<ZilaUserProfile>(defaultDemoUser);
+  const [userProfile, setUserProfile] = useState<ZilaUserProfile>(defaultUserProfile);
+  const [avatarDataUrl, setAvatarDataUrl] = useState("");
   const syncState = useMemo(() => buildSyncState(latestPayment, proofCount), [latestPayment, proofCount]);
 
   useEffect(() => {
     const updatePayment = () => setLatestPayment(getLatestPaymentTransaction());
     const updateProof = () => setProofCount(getStoredProofTransactions().length);
-    const updateSession = () => setUserProfile(getZilaUserProfile());
+    const updateSession = () => {
+      setUserProfile(getZilaUserProfile());
+      setAvatarDataUrl(getZilaAvatarDataUrl());
+    };
 
     updatePayment();
     updateProof();
@@ -347,6 +351,9 @@ export function DesktopShell({ children }: DesktopShellProps) {
                       sizes="52px"
                       className="object-cover object-center"
                     />
+                  ) : avatarDataUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarDataUrl} alt={userProfile.fullName} className="h-full w-full object-cover" />
                   ) : (
                     userProfile.name.charAt(0).toUpperCase()
                   )}
