@@ -15,6 +15,7 @@ import {
 import { clearPaymentDraft, getDefaultPaymentDraft, getPaymentDraft, savePaymentDraft } from "@/lib/paymentDraftStore";
 import { FlowBackNav } from "@/components/ui/FlowBackNav";
 import { getMoneySourceState, saveMoneySourceState, subscribeToMoneySource } from "@/lib/moneySourceStore";
+import { connectOperatingBalance } from "@/lib/moneyMovementStore";
 import {
   getProtectedMoneySummary,
   applyReserveForPayment,
@@ -37,13 +38,26 @@ import { OperationalWalletStatus } from "@/components/ui/OperationalWalletStatus
 import { getProjects } from "@/data/projects";
 import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
 
-type FlowState = "details" | "review" | "awaiting-signature" | "signing" | "processing" | "success" | "failed";
+type FlowState = "details" | "review" | "connecting-wallet" | "awaiting-signature" | "signing" | "processing" | "success" | "failed";
 
 interface XamanPayloadRequest {
+  kind: "connect" | "payment";
   uuid: string;
   qrUrl: string;
   deepLink: string;
   websocketStatusUrl: string;
+}
+
+interface XamanConnectionResponse {
+  uuid?: string;
+  id?: string;
+  qr_png?: string;
+  qrPng?: string;
+  deeplink?: string;
+  url?: string;
+  websocket_status?: string;
+  websocketStatus?: string;
+  error?: string;
 }
 
 interface PayloadStatusResponse {
@@ -54,6 +68,16 @@ interface PayloadStatusResponse {
   validated?: boolean;
   ledgerIndex?: number;
   timestamp?: string;
+  error?: string;
+}
+
+interface XamanPayloadStatusResponse {
+  meta: {
+    signed: boolean;
+  };
+  response: {
+    account: string | null;
+  };
   error?: string;
 }
 
@@ -460,6 +484,52 @@ export function SendMoneyScreen() {
   const currencySupported = payoutCurrency === "XRP";
   const railSupported = preferredRail === "Stablecoin";
   const canApproveInXaman = currencySupported && railSupported;
+  const walletConnected = moneySource.connected && Boolean(moneySource.walletAddress);
+  const isConnectingWallet = flowState === "connecting-wallet" || activePayload?.kind === "connect";
+  const isAwaitingXamanApproval = activePayload?.kind === "payment" && (flowState === "awaiting-signature" || flowState === "signing");
+  const approvalStatusLabel = (() => {
+    if (flowState === "success") {
+      return "Payment approved";
+    }
+    if (flowState === "failed") {
+      return "Payment failed or cancelled";
+    }
+    if (isAwaitingXamanApproval) {
+      return "Awaiting approval in Xaman";
+    }
+    if (isConnectingWallet) {
+      return "Connecting wallet";
+    }
+    if (!walletConnected) {
+      return "Wallet not connected";
+    }
+    if (canApproveInXaman) {
+      return "Payment ready for Xaman";
+    }
+    return "Wallet connected";
+  })();
+  const approvalStatusDetail = (() => {
+    if (!walletConnected) {
+      return "Connect Xaman here, then approve this payout without leaving Payments.";
+    }
+    if (isAwaitingXamanApproval) {
+      return "Scan the QR code or open Xaman to approve this payout.";
+    }
+    if (flowState === "success") {
+      return "Zila recorded proof and updated operational history.";
+    }
+    if (flowState === "failed") {
+      return paymentMessage ?? "Review the details and try again.";
+    }
+    return moneySource.walletAddressShort ? `Connected wallet ${moneySource.walletAddressShort}` : "Connected wallet ready for approval.";
+  })();
+  const approvalButtonLabel = !walletConnected
+    ? isConnectingWallet
+      ? "Connecting Xaman"
+      : "Connect Xaman Wallet"
+    : flowState === "processing"
+      ? "Preparing Xaman..."
+      : "Approve in Xaman";
   const supplierProjectHint = selectedSupplier?.linkedProjects.includes(projectName)
     ? `${selectedSupplier.supplierName} is already linked to ${projectName}.`
     : `${projectName} selected. Zila will use this context without locking payout details.`;
@@ -485,6 +555,40 @@ export function SendMoneyScreen() {
       sourceLabel,
     });
   }, [amountValue, destinationAddress, draftLoaded, linkedMilestone, payoutCurrency, payoutNotes, preferredRail, projectName, reason, recipient, sourceId, sourceLabel]);
+
+  const finalizeWalletConnection = async (payloadId: string, options: { allowPending?: boolean } = {}) => {
+    const response = await fetch(`/api/xaman/payload/${payloadId}`, { cache: "no-store" });
+    const body = (await response.json()) as XamanPayloadStatusResponse;
+
+    if (!response.ok) {
+      throw new Error(body.error || "Unable to verify Xaman connection.");
+    }
+
+    if (!body.meta.signed || !body.response.account) {
+      if (options.allowPending) {
+        return;
+      }
+
+      setFlowState("failed");
+      setPaymentMessage("Wallet connection was cancelled.");
+      setActivePayload(null);
+      return;
+    }
+
+    saveMoneySourceState({
+      connected: true,
+      sourceLabel: "Xaman wallet",
+      walletAddress: body.response.account,
+      walletAddressShort: shortenWalletAddress(body.response.account),
+      status: "ready",
+      network: "XRPL Mainnet",
+      proofEnabled: true,
+    });
+    connectOperatingBalance();
+    setActivePayload(null);
+    setFlowState("review");
+    setPaymentMessage("Wallet connected. Payment is ready for Xaman approval.");
+  };
 
   const finalizePayment = async (payloadId: string) => {
     const pending = getPendingPayment();
@@ -629,14 +733,19 @@ export function SendMoneyScreen() {
     }
 
     const pending = getPendingPayment();
-    if (pending?.payloadId !== payloadId) {
+    if (pending?.payloadId === payloadId) {
+      setFlowState("processing");
+      void finalizePayment(payloadId).catch((error) => {
+        setFlowState("failed");
+        setPaymentMessage(error instanceof Error ? error.message : "Unable to confirm payment.");
+      });
       return;
     }
 
-    setFlowState("processing");
-    void finalizePayment(payloadId).catch((error) => {
+    setFlowState("connecting-wallet");
+    void finalizeWalletConnection(payloadId).catch((error) => {
       setFlowState("failed");
-      setPaymentMessage(error instanceof Error ? error.message : "Unable to confirm payment.");
+      setPaymentMessage(error instanceof Error ? error.message : "Unable to complete wallet connection.");
     });
   }, [searchParams]);
 
@@ -652,36 +761,53 @@ export function SendMoneyScreen() {
         const data = JSON.parse(String(event.data)) as { opened?: boolean; signed?: boolean; dispatched?: boolean; expired?: boolean };
 
         if (data.opened) {
-          setFlowState("signing");
-          setPaymentMessage("Review the payment in Xaman.");
+          if (activePayload.kind === "connect") {
+            setFlowState("connecting-wallet");
+            setPaymentMessage("Approve the wallet connection in Xaman.");
+          } else {
+            setFlowState("signing");
+            setPaymentMessage("Review the payment in Xaman.");
+          }
         }
 
-        if (data.dispatched) {
+        if (data.dispatched && activePayload.kind === "payment") {
           setFlowState("processing");
           setPaymentMessage("Payment submitted. Waiting for confirmation.");
         }
 
         if (data.expired) {
-          clearPendingPayment();
+          if (activePayload.kind === "payment") {
+            clearPendingPayment();
+          }
           setFlowState("failed");
-          setPaymentMessage("Signing request expired. Try again.");
+          setPaymentMessage(activePayload.kind === "connect" ? "Wallet connection request expired. Try again." : "Signing request expired. Try again.");
           setActivePayload(null);
         }
 
         if (typeof data.signed === "boolean") {
           if (!data.signed) {
-            clearPendingPayment();
+            if (activePayload.kind === "payment") {
+              clearPendingPayment();
+            }
             setFlowState("failed");
-            setPaymentMessage("Payment was cancelled.");
+            setPaymentMessage(activePayload.kind === "connect" ? "Wallet connection was cancelled." : "Payment was cancelled.");
             setActivePayload(null);
             return;
           }
 
-          setFlowState("processing");
-          void finalizePayment(activePayload.uuid).catch((error) => {
-            setFlowState("failed");
-            setPaymentMessage(error instanceof Error ? error.message : "Unable to confirm payment.");
-          });
+          if (activePayload.kind === "connect") {
+            setFlowState("connecting-wallet");
+            void finalizeWalletConnection(activePayload.uuid).catch((error) => {
+              setFlowState("failed");
+              setPaymentMessage(error instanceof Error ? error.message : "Unable to complete wallet connection.");
+            });
+          } else {
+            setFlowState("processing");
+            void finalizePayment(activePayload.uuid).catch((error) => {
+              setFlowState("failed");
+              setPaymentMessage(error instanceof Error ? error.message : "Unable to confirm payment.");
+            });
+          }
         }
       } catch {
         // Xaman websocket sends keepalive frames that are safe to ignore.
@@ -865,6 +991,55 @@ export function SendMoneyScreen() {
     return null;
   };
 
+  const handleConnectWalletFromApproval = async () => {
+    if (isConnectingWallet) {
+      return;
+    }
+
+    setFieldErrors({});
+    setFlowState("connecting-wallet");
+    setPaymentMessage("Preparing Xaman wallet connection...");
+
+    try {
+      const response = await fetch("/api/xaman/connect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          returnPath: "/payments/send",
+        }),
+      });
+      const body = (await response.json()) as XamanConnectionResponse;
+
+      if (!response.ok) {
+        throw new Error(body.error || "Unable to create Xaman connection.");
+      }
+
+      const uuid = body.uuid || body.id;
+      const qrUrl = body.qr_png || body.qrPng;
+      const deepLink = body.deeplink || body.url;
+      const websocketStatusUrl = body.websocket_status || body.websocketStatus;
+
+      if (!uuid || !qrUrl || !deepLink || !websocketStatusUrl) {
+        throw new Error("Xaman connection request is missing QR or status details.");
+      }
+
+      setActivePayload({
+        kind: "connect",
+        uuid,
+        qrUrl,
+        deepLink,
+        websocketStatusUrl,
+      });
+      setPaymentMessage("Scan the QR code or open Xaman to connect your wallet.");
+    } catch (error) {
+      setFlowState("failed");
+      setActivePayload(null);
+      setPaymentMessage(error instanceof Error ? error.message : "Unable to connect Xaman wallet.");
+    }
+  };
+
   const handleConfirm = async () => {
     const validationMessage = validatePaymentReadiness();
     if (validationMessage) {
@@ -925,13 +1100,22 @@ export function SendMoneyScreen() {
         protectedAfter,
         walletAddress: moneySource.walletAddress,
       });
-      setActivePayload(body);
+      setActivePayload({ ...body, kind: "payment" });
       setFlowState("awaiting-signature");
       setPaymentMessage("Open Xaman to approve this operational payout.");
     } catch (error) {
       setFlowState("failed");
       setPaymentMessage(error instanceof Error ? error.message : "Unable to prepare payment.");
     }
+  };
+
+  const handleApprovalPrimaryAction = () => {
+    if (!walletConnected) {
+      void handleConnectWalletFromApproval();
+      return;
+    }
+
+    void handleConfirm();
   };
 
   const handleSaveDraft = () => {
@@ -1197,11 +1381,18 @@ export function SendMoneyScreen() {
                     <p className="mt-2 text-[14px] leading-[1.6] text-[#DCE8FF]">
                       {recipient || "Supplier"} · {formatPayoutAmount(amountValue, payoutCurrency)} · {projectName}
                     </p>
+                    <div className="mt-3 rounded-[16px] border border-white/12 bg-white/[0.07] px-3.5 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#C9D4F5]">Xaman status</span>
+                        <strong className="text-right text-[12px] font-semibold text-[#D9FF57]">{approvalStatusLabel}</strong>
+                      </div>
+                      <p className="mt-1.5 text-[11px] leading-[1.55] text-[#C9D4F5]">{approvalStatusDetail}</p>
+                    </div>
                     {paymentMessage ? <p className="mt-2 text-[12px] font-medium text-[#FFE8B0]">{paymentMessage}</p> : null}
                     <div className="mt-4 grid gap-2">
-                      <button type="button" onClick={handleConfirm} disabled={flowState === "processing"} className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(217,255,87,0.16)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_42px_rgba(217,255,87,0.22)] disabled:cursor-not-allowed disabled:opacity-50">
-                        Approve in Xaman
-                        <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />
+                      <button type="button" onClick={handleApprovalPrimaryAction} disabled={flowState === "processing" || isConnectingWallet} className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#D9FF57] px-5 text-[13px] font-semibold text-[#111827] shadow-[0_18px_36px_rgba(217,255,87,0.16)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_42px_rgba(217,255,87,0.22)] disabled:cursor-not-allowed disabled:opacity-50">
+                        {approvalButtonLabel}
+                        {isConnectingWallet || flowState === "processing" ? <LoaderCircle className="h-[14px] w-[14px] animate-spin" strokeWidth={2} /> : <ArrowRight className="h-[14px] w-[14px]" strokeWidth={2} />}
                       </button>
                       <button type="button" onClick={handleSaveDraft} className="inline-flex h-11 items-center justify-center rounded-full border border-white/16 bg-white/[0.08] px-5 text-[13px] font-semibold text-[#EAF1FF] transition hover:bg-white/[0.12]">
                         Save draft
@@ -1214,14 +1405,20 @@ export function SendMoneyScreen() {
           </form>
         )}
 
-        {activePayload && (flowState === "awaiting-signature" || flowState === "signing") ? (
+        {activePayload && (flowState === "connecting-wallet" || flowState === "awaiting-signature" || flowState === "signing") ? (
           <section className="mt-6 rounded-[26px] border border-cyan-300/18 bg-[linear-gradient(180deg,rgba(103,232,249,0.12),rgba(16,42,79,0.62))] p-5 shadow-[0_20px_48px_rgba(31,68,116,0.18),inset_0_1px_0_rgba(255,255,255,0.10)]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <Image src={activePayload.qrUrl} alt="Xaman signing QR code" width={136} height={136} unoptimized className="h-36 w-36 rounded-[18px] border border-white/18 bg-white p-2" />
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">{flowState === "signing" ? "Signing" : "Awaiting approval"}</p>
-                <h2 className="mt-2 text-[22px] font-semibold tracking-[-0.04em] text-white">Approve in Xaman</h2>
-                <p className="mt-2 max-w-[420px] text-[13px] leading-[1.65] text-[#DCE8FF]">Scan or open Xaman. Zila records proof automatically after confirmation.</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#BFEFFF]">
+                  {activePayload.kind === "connect" ? "Connecting wallet" : flowState === "signing" ? "Signing" : "Awaiting approval"}
+                </p>
+                <h2 className="mt-2 text-[22px] font-semibold tracking-[-0.04em] text-white">{activePayload.kind === "connect" ? "Connect Xaman Wallet" : "Approve in Xaman"}</h2>
+                <p className="mt-2 max-w-[420px] text-[13px] leading-[1.65] text-[#DCE8FF]">
+                  {activePayload.kind === "connect"
+                    ? "Scan or open Xaman. Once approved, this wallet becomes your active payment source."
+                    : "Scan or open Xaman. Zila records proof automatically after confirmation."}
+                </p>
                 <Link href={activePayload.deepLink} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-11 items-center justify-center rounded-full bg-white px-4 text-[13px] font-semibold text-[#111827]">
                   Open Xaman
                 </Link>

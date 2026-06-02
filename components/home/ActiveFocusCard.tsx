@@ -6,14 +6,25 @@ import { ArrowRight, FolderKanban, ShieldCheck } from "lucide-react";
 
 import { projects as seedProjects, type Project } from "@/data/projects";
 import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
+import { getZilaUserProfile, subscribeToZilaSession } from "@/lib/demoSession";
 
 export function ActiveFocusCard() {
   const [focusProject, setFocusProject] = useState<Project | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
-    const update = () => setFocusProject(mergeOperationalProjects(seedProjects)[0] ?? null);
+    const update = () => {
+      setFocusProject(mergeOperationalProjects(seedProjects)[0] ?? null);
+      setIsDemo(getZilaUserProfile().isDemo);
+    };
     update();
-    return subscribeToOperationalProjects(update);
+    const unsubscribeProjects = subscribeToOperationalProjects(update);
+    const unsubscribeSession = subscribeToZilaSession(update);
+
+    return () => {
+      unsubscribeProjects();
+      unsubscribeSession();
+    };
   }, []);
 
   if (!focusProject) {
@@ -21,7 +32,11 @@ export function ActiveFocusCard() {
   }
 
   const projectHref = `/projects/${focusProject.id}`;
-  const actionLabel = focusProject.statusTone === "warning" ? "Coordinate payout" : "Review project";
+  const actionLabel = isDemo && focusProject.statusTone === "warning" ? "Coordinate payout" : "Add commitment";
+  const focusAmount = isDemo ? `${focusProject.cashNeeded} needs attention` : "Setup required";
+  const focusCopy = isDemo
+    ? focusProject.financialImpact
+    : `Add your first supplier payout or commitment to begin tracking operational pressure for ${focusProject.name}.`;
 
   return (
     <section className="zila-card-hover rounded-[28px] border border-white/22 bg-[linear-gradient(180deg,#214F83,#173D6D_50%,#102A4F)] p-5 shadow-[0_28px_68px_rgba(31,68,116,0.24),inset_0_1px_0_rgba(234,241,255,0.14)] backdrop-blur-xl">
@@ -44,9 +59,9 @@ export function ActiveFocusCard() {
       </div>
 
       <div className="mt-5 rounded-[20px] border border-white/14 bg-[#102A4F]/50 px-4 py-4 shadow-[0_14px_28px_rgba(31,68,116,0.16),inset_0_1px_0_rgba(234,241,255,0.10)]">
-        <p className="text-[18px] font-semibold tracking-[-0.035em] text-[#EAF1FF]">{focusProject.cashNeeded} needs attention</p>
+        <p className="text-[18px] font-semibold tracking-[-0.035em] text-[#EAF1FF]">{focusAmount}</p>
         <p className="mt-2 text-[13px] leading-[1.6] text-[#C9D4F5]">
-          {focusProject.financialImpact}
+          {focusCopy}
         </p>
       </div>
 

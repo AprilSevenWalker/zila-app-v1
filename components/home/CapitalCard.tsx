@@ -15,6 +15,8 @@ import {
   type ReserveCategory,
 } from "@/lib/protectedMoneyStore";
 import { subscribeToLatestPaymentTransaction } from "@/lib/paymentTransactionStore";
+import { projects as seedProjects } from "@/data/projects";
+import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
 
 const categories: ReserveCategory[] = [
   "Tax",
@@ -25,8 +27,6 @@ const categories: ReserveCategory[] = [
   "Travel",
   "Equipment",
 ];
-
-const projectOptions = ["Project Horizon", "Atlas Project", "Northstar Project", "Helix Project"];
 
 function formatCurrency(amount: number) {
   return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -53,23 +53,42 @@ export const CapitalCard: React.FC = () => {
   const [category, setCategory] = useState<ReserveCategory>("Supplier");
   const [linkedProject, setLinkedProject] = useState("");
   const [latestInsight, setLatestInsight] = useState<string | null>(null);
+  const [projectOptions, setProjectOptions] = useState<string[]>([]);
 
   useEffect(() => {
-    const update = () => setSummary(getProtectedMoneySummary());
+    const update = () => {
+      setSummary(getProtectedMoneySummary());
+      setProjectOptions(mergeOperationalProjects(seedProjects).map((project) => project.name));
+    };
 
     update();
     const unsubscribeProtected = subscribeToProtectedMoney(update);
     const unsubscribePayments = subscribeToLatestPaymentTransaction(update);
+    const unsubscribeProjects = subscribeToOperationalProjects(update);
 
     return () => {
       unsubscribeProtected();
       unsubscribePayments();
+      unsubscribeProjects();
     };
   }, []);
 
   const safePercentage = useMemo(() => {
+    if (summary.totalBalance <= 0) {
+      return 0;
+    }
+
     return Math.max(Math.min((summary.safeToSpend / summary.totalBalance) * 100, 100), 0);
   }, [summary.safeToSpend, summary.totalBalance]);
+  const recommendations = useMemo(() => {
+    const [first, second] = projectOptions;
+    return [
+      first ? `Coordinate the first supplier payout for ${first}` : "Set up your first supplier payout",
+      second ? `Protect supplier reserve for ${second}` : first ? `Protect supplier reserve for ${first}` : "Protect supplier reserve",
+      first ? `Connect payment rails for ${first}` : "Connect payment rails",
+      second ? `Create first approval workflow for ${second}` : first ? `Create first approval workflow for ${first}` : "Create first approval workflow",
+    ].slice(0, 4);
+  }, [projectOptions]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -133,7 +152,7 @@ export const CapitalCard: React.FC = () => {
         <div className="mb-4">
           <div className="mb-3 flex h-2 overflow-hidden rounded-full bg-[#102A4F]/72 shadow-[inset_0_1px_0_rgba(234,241,255,0.10)]">
             <div className="bg-[#D9FF57] shadow-[0_0_14px_rgba(217,255,87,0.30)]" style={{ width: `${safePercentage}%` }} />
-            <div className="bg-[#6D5EF8]/78" style={{ width: `${(summary.protectedAmount / summary.totalBalance) * 100}%` }} />
+            <div className="bg-[#6D5EF8]/78" style={{ width: `${summary.totalBalance > 0 ? (summary.protectedAmount / summary.totalBalance) * 100 : 0}%` }} />
             <div className="flex-1 bg-[#67E8F9]/66" />
           </div>
           <div className="flex justify-between gap-2 text-[9px] text-[#C9D4F5]">
@@ -153,6 +172,18 @@ export const CapitalCard: React.FC = () => {
             <div key={label as string} className="rounded-[14px] border border-white/13 bg-[#102A4F]/48 p-3 shadow-[inset_0_1px_0_rgba(234,241,255,0.09)] backdrop-blur-sm">
               <p className="mb-2 text-[9px] text-[#C9D4F5]">{label}</p>
               <p className={`text-[16px] font-semibold ${tone}`}>{formatCurrency(value as number)}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {recommendations.map((recommendation) => (
+            <div
+              key={recommendation}
+              className="rounded-[16px] border border-white/12 bg-[#102A4F]/54 px-4 py-3 shadow-[inset_0_1px_0_rgba(234,241,255,0.08)]"
+            >
+              <p className="text-[11px] font-semibold text-[#D9FF57]">Recommendation</p>
+              <p className="mt-1 text-[12px] leading-[1.45] text-[#EAF1FF]">{recommendation}</p>
             </div>
           ))}
         </div>

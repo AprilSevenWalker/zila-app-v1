@@ -16,7 +16,14 @@ import {
 } from "lucide-react";
 
 import { ActiveFocusCard } from "@/components/home/ActiveFocusCard";
+import { AttentionPanel } from "@/components/home/AttentionPanel";
+import { BusinessList } from "@/components/home/BusinessList";
+import { CapitalCard } from "@/components/home/CapitalCard";
 import { DesktopConnectMoneyPrompt } from "@/components/home/DesktopConnectMoneyPrompt";
+import { GreetingSection } from "@/components/home/GreetingSection";
+import { InsightCard } from "@/components/home/InsightCard";
+import { OperatingFlowCard } from "@/components/home/OperatingFlowCard";
+import { OperationalHeroCard } from "@/components/home/OperationalHeroCard";
 import { ProjectCarousel } from "@/components/home/ProjectCarousel";
 import { projects as seedProjects } from "@/data/projects";
 import {
@@ -27,6 +34,7 @@ import {
   type PaymentMovementRecord,
 } from "@/lib/paymentTransactionStore";
 import { getStoredOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
+import { getZilaUserProfile, subscribeToZilaSession, type ZilaUserProfile } from "@/lib/demoSession";
 import {
   BASE_PROTECTED,
   COMMITTED,
@@ -218,6 +226,7 @@ function HeroVisual() {
 }
 
 export function DesktopHomeScreen() {
+  const [userProfile, setUserProfile] = useState<ZilaUserProfile | null>(null);
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
   const [paymentHistory, setPaymentHistory] = useState<PaymentMovementRecord[]>([]);
   const [moneySummary, setMoneySummary] = useState(getInitialProtectedMoneySummary);
@@ -297,23 +306,53 @@ export function DesktopHomeScreen() {
     };
     const updateMoney = () => setMoneySummary(getProtectedMoneySummary());
     const updateProjects = () => setStoredProjects(getStoredOperationalProjects());
+    const updateSession = () => setUserProfile(getZilaUserProfile());
 
     updatePayment();
     updateMoney();
     updateProjects();
+    updateSession();
     const unsubscribePayment = subscribeToLatestPaymentTransaction(() => {
       updatePayment();
       updateMoney();
     });
     const unsubscribeProtected = subscribeToProtectedMoney(updateMoney);
     const unsubscribeProjects = subscribeToOperationalProjects(updateProjects);
+    const unsubscribeSession = subscribeToZilaSession(updateSession);
 
     return () => {
       unsubscribePayment();
       unsubscribeProtected();
       unsubscribeProjects();
+      unsubscribeSession();
     };
   }, []);
+
+  if (!userProfile) {
+    return <div className="hidden lg:block" />;
+  }
+
+  if (!userProfile.isDemo) {
+    return (
+      <div className="hidden lg:block">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4">
+            <GreetingSection />
+            <OperationalHeroCard />
+            <CapitalCard />
+            <ProjectCarousel />
+            <ActiveFocusCard />
+          </div>
+          <aside className="space-y-4">
+            <AttentionPanel />
+            <OperatingFlowCard />
+            <BusinessList />
+            <InsightCard />
+          </aside>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="hidden lg:block">

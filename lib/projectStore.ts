@@ -1,6 +1,7 @@
 import type { Project } from "@/data/projects";
 
 const PROJECTS_KEY = "zila-operational-projects";
+const OPERATIONAL_SUMMARY_KEY = "zila-onboarding-operational-summary";
 const UPDATE_EVENT = "zila-operational-projects-updated";
 
 function isBrowser() {
@@ -19,6 +20,55 @@ function currency(amount: number) {
   return `$${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
+function parseBudget(value?: string | number, fallback = 25000) {
+  const amount = typeof value === "number" ? value : Number(String(value ?? "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(amount) && amount > 0 ? amount : fallback;
+}
+
+function starterContextForStage(stage?: string, projectName = "this project") {
+  if (stage === "Planning") {
+    return {
+      nextMilestone: "Create first supplier commitment",
+      signal: `Create first supplier commitment for ${projectName}.`,
+      action: "Add first commitment",
+    };
+  }
+  if (stage === "Procurement") {
+    return {
+      nextMilestone: "Approve first supplier payment",
+      signal: `${projectName} has procurement payments ready to structure.`,
+      action: "Review supplier payout",
+    };
+  }
+  if (stage === "Active") {
+    return {
+      nextMilestone: "Coordinate upcoming payout",
+      signal: `Coordinate upcoming payout for ${projectName}.`,
+      action: "Coordinate payout",
+    };
+  }
+  if (stage === "Delivery") {
+    return {
+      nextMilestone: "Protect supplier reserve before final payment",
+      signal: `Protect supplier reserve before final payment for ${projectName}.`,
+      action: "Protect reserve",
+    };
+  }
+  if (stage === "Completed") {
+    return {
+      nextMilestone: "Close out proof history",
+      signal: `Prepare closeout proof history for ${projectName}.`,
+      action: "Prepare closeout",
+    };
+  }
+
+  return {
+    nextMilestone: "Add first obligation",
+    signal: `Add first obligation for ${projectName}.`,
+    action: "Add first obligation",
+  };
+}
+
 function numberFromStorage(key: string, fallback: number) {
   if (!isBrowser()) {
     return fallback;
@@ -33,14 +83,18 @@ function makeProject(input: {
   name: string;
   budget: number;
   template?: string;
+  stage?: string;
   protectedTotal?: number;
+  committedTotal?: number;
   safeToSpend?: number;
   createdAtIso?: string;
 }): Project {
   const protectedTotal = input.protectedTotal ?? Math.round(input.budget * 0.22);
-  const safeToSpend = input.safeToSpend ?? Math.max(input.budget - protectedTotal, 0);
+  const committedTotal = input.committedTotal ?? Math.round(input.budget * 0.1);
+  const safeToSpend = input.safeToSpend ?? Math.max(input.budget - protectedTotal - committedTotal, 0);
   const spent = Math.max(input.budget - safeToSpend - protectedTotal, 0);
   const id = input.id ?? `project-${slugify(input.name)}`;
+  const starter = starterContextForStage(input.stage, input.name);
 
   return {
     id,
@@ -48,7 +102,7 @@ function makeProject(input: {
     client: input.name,
     location: "Live workspace",
     category: "Project",
-    stage: "Live setup",
+    stage: input.stage || "Live setup",
     status: "Healthy",
     statusTone: "success",
     budget: currency(input.budget),
@@ -57,34 +111,34 @@ function makeProject(input: {
     progress: 24,
     dueLabel: "New project live",
     cashNeeded: "$0",
-    nextMilestone: input.template ? `${input.template} workspace ready` : "Connect first payout or reserve movement",
+    nextMilestone: starter.nextMilestone,
     owner: "Operations",
     verifiedDays: 1,
     updatedAt: "Created just now",
     insight: "New project is live. Payments, reserves, and proof records will sync here automatically.",
-    stateSignal: "Live project ready for operational movement.",
+    stateSignal: starter.signal,
     summary: `${input.name} is ready for payment coordination, reserve tracking, and verified operational proof.`,
     remaining: currency(safeToSpend),
-    financialImpact: "No payout pressure yet. Operational activity will appear here as money moves.",
-    zilaSays: "Start with the first supplier payout or reserve allocation to build verified operational memory.",
-    zilaSuggestionShort: "Add first payment or reserve movement",
+    financialImpact: "Add your first supplier payout or commitment to begin tracking operational pressure.",
+    zilaSays: "Set up your first payout, supplier commitment, or reserve to start proof history.",
+    zilaSuggestionShort: "Add first obligation",
     nextMoveTitle: "Next move",
-    nextMoveSummary: "Prepare the first operational payment",
+    nextMoveSummary: "Add your first supplier payout or commitment",
     ifNoAction: "Project remains ready with no movement yet",
     ifActionTaken: "Payment, reserve, and proof state will sync automatically",
-    primaryActionLabel: "Make Payment",
+    primaryActionLabel: starter.action,
     secondaryActionLabel: "Review options",
     recentUpdates: [
-      { label: "Project created", tone: "success" },
+      { label: `${input.name} added`, tone: "success" },
       { label: "Operational workspace ready", tone: "info" },
       { label: "Proof history ready", tone: "success" },
     ],
-    suggestedActions: ["Make Payment", "Protect reserve"],
+    suggestedActions: [starter.action, "Connect payment rail", "Create reserve"],
     lastVerifiedAction: "Project created · Just now · Ready",
     tasks: [
-      { title: "Add first supplier or payee", due: "Today", status: "Ready now" },
-      { title: "Prepare first payment", due: "Today", status: "Ready now" },
-      { title: "Review reserve setup", due: "This week", status: "Prepared" },
+      { title: "Add first supplier commitment", due: "Today", status: "Setup required" },
+      { title: "Connect payment rail", due: "Today", status: "Ready now" },
+      { title: "Create reserve", due: "This week", status: "Prepared" },
     ],
     timeline: [
       { label: "Now", detail: "Project created and ready for operational movement" },
@@ -159,7 +213,7 @@ export function mergeOperationalProjects(seedProjects: Project[]) {
   return [...freshStored, ...seedProjects];
 }
 
-export function saveOnboardingProjects(input: Array<{ name: string; description?: string }>) {
+export function saveOnboardingProjects(input: Array<{ name: string; description?: string; budget?: string; stage?: string; budgetUnknown?: boolean }>) {
   if (!isBrowser()) {
     return [];
   }
@@ -168,31 +222,59 @@ export function saveOnboardingProjects(input: Array<{ name: string; description?
     .map((project, index) => ({
       name: project.name.trim(),
       description: project.description?.trim() || "",
+      budget: project.budget,
+      stage: project.stage || "Planning",
+      budgetUnknown: Boolean(project.budgetUnknown),
       index,
     }))
     .filter((project) => project.name.length > 0)
     .map((project) => {
-      const budget = 12000 + project.index * 4500;
+      const budget = project.budgetUnknown ? 25000 : parseBudget(project.budget, 25000);
+      const protectedTotal = Math.round(budget * 0.2);
+      const committedTotal = Math.round(budget * 0.1);
+      const safeToSpend = Math.max(budget - protectedTotal - committedTotal, 0);
       return {
         ...makeProject({
           id: `project-${slugify(project.name)}`,
           name: project.name,
           budget,
           template: project.description || "User project",
-          protectedTotal: 0,
-          safeToSpend: budget,
+          stage: project.stage,
+          protectedTotal,
+          committedTotal,
+          safeToSpend,
         }),
         summary: project.description || `${project.name} is ready for payment coordination and operating memory.`,
-        nextMilestone: "Add first payment, supplier update, or approval",
-        cashNeeded: "$0",
-        remaining: currency(budget),
+        nextMilestone: starterContextForStage(project.stage, project.name).nextMilestone,
+        cashNeeded: currency(committedTotal),
+        remaining: currency(safeToSpend),
+        reserved: currency(protectedTotal),
+        spent: currency(committedTotal),
         status: "Live",
         statusTone: "success" as const,
         zilaSays: "Record the first payment, supplier update, or approval to build this project's operational memory.",
+        zilaSuggestionShort: "Add first obligation",
+        nextMoveSummary: starterContextForStage(project.stage, project.name).signal,
+        primaryActionLabel: starterContextForStage(project.stage, project.name).action,
       };
     });
 
+  const totalBalance = projects.reduce((total, project) => total + parseBudget(project.budget.replace(/[^0-9.]/g, ""), 25000), 0);
+  const protectedAmount = Math.round(totalBalance * 0.2);
+  const committedAmount = Math.round(totalBalance * 0.1);
+  const safeToSpend = Math.max(totalBalance - protectedAmount - committedAmount, 0);
+
   window.localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  window.localStorage.setItem(
+    OPERATIONAL_SUMMARY_KEY,
+    JSON.stringify({
+      totalBalance,
+      protectedAmount,
+      committedAmount,
+      safeToSpend,
+      generatedAtIso: new Date().toISOString(),
+    }),
+  );
   window.dispatchEvent(new CustomEvent(UPDATE_EVENT, { detail: projects }));
   return projects;
 }

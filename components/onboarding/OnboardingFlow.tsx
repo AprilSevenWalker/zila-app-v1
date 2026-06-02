@@ -23,10 +23,15 @@ const businessTypes = [
 ];
 
 const paymentRails = ["Bank Transfers", "Mobile Money", "Stablecoins", "XRP", "Other"];
+const projectStages = ["Planning", "Active", "Procurement", "Delivery", "Completed"];
+const budgetExamples = ["10000", "25000", "50000", "100000"];
 
 interface OnboardingProjectDraft {
   name: string;
   description: string;
+  budget: string;
+  stage: string;
+  budgetUnknown: boolean;
 }
 
 function initialsFor(name: string) {
@@ -56,7 +61,9 @@ export function OnboardingFlow() {
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState(() => (typeof window !== "undefined" ? window.localStorage.getItem("zila-business-name") || "" : ""));
   const [businessType, setBusinessType] = useState(() => (typeof window !== "undefined" ? window.localStorage.getItem("zila-business-type") || "Construction" : "Construction"));
-  const [projects, setProjects] = useState<OnboardingProjectDraft[]>([{ name: "", description: "" }]);
+  const [projects, setProjects] = useState<OnboardingProjectDraft[]>([
+    { name: "", description: "", budget: "", stage: "Planning", budgetUnknown: false },
+  ]);
   const [selectedRails, setSelectedRails] = useState<string[]>([]);
   const [avatarDataUrl, setAvatarDataUrl] = useState("");
   const [avatarMode, setAvatarMode] = useState<"profile" | "logo" | "skip">("skip");
@@ -81,12 +88,12 @@ export function OnboardingFlow() {
     return true;
   }, [businessName, businessType, cleanProjects.length, email, name, password, selectedRails.length, stepIndex]);
 
-  const updateProject = (index: number, field: keyof OnboardingProjectDraft, value: string) => {
+  const updateProject = <Key extends keyof OnboardingProjectDraft>(index: number, field: Key, value: OnboardingProjectDraft[Key]) => {
     setProjects((current) => current.map((project, projectIndex) => (projectIndex === index ? { ...project, [field]: value } : project)));
   };
 
   const addProject = () => {
-    setProjects((current) => [...current, { name: "", description: "" }]);
+    setProjects((current) => [...current, { name: "", description: "", budget: "", stage: "Planning", budgetUnknown: false }]);
   };
 
   const removeProject = (index: number) => {
@@ -218,6 +225,65 @@ export function OnboardingFlow() {
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         <input value={project.name} onChange={(event) => updateProject(index, "name", event.target.value)} placeholder="Project name" className="h-12 rounded-[16px] border border-white/70 bg-white/78 px-4 text-[14px] font-semibold outline-none placeholder:text-[#667085]" />
                         <input value={project.description} onChange={(event) => updateProject(index, "description", event.target.value)} placeholder="Optional description" className="h-12 rounded-[16px] border border-white/70 bg-white/78 px-4 text-[14px] font-semibold outline-none placeholder:text-[#667085]" />
+                        <div className="sm:col-span-2">
+                          <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#526173]">
+                            What is the current budget for this project?
+                          </label>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                            <input
+                              value={project.budget}
+                              onChange={(event) => updateProject(index, "budget", event.target.value)}
+                              disabled={project.budgetUnknown}
+                              placeholder="$25,000"
+                              inputMode="numeric"
+                              className="h-12 rounded-[16px] border border-white/70 bg-white/78 px-4 text-[14px] font-semibold outline-none placeholder:text-[#667085] disabled:opacity-55"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateProject(index, "budgetUnknown", !project.budgetUnknown);
+                                if (!project.budgetUnknown) {
+                                  updateProject(index, "budget", "");
+                                }
+                              }}
+                              className={`h-12 rounded-[16px] border px-4 text-[12px] font-semibold ${project.budgetUnknown ? "border-[#D9FF57]/70 bg-[#D9FF57] text-[#10233F]" : "border-white/70 bg-white/62 text-[#173D6D]"}`}
+                            >
+                              I don&apos;t know yet
+                            </button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {budgetExamples.map((budget) => (
+                              <button
+                                key={budget}
+                                type="button"
+                                onClick={() => {
+                                  updateProject(index, "budgetUnknown", false);
+                                  updateProject(index, "budget", budget);
+                                }}
+                                className="rounded-full border border-[#173D6D]/12 bg-white/58 px-3 py-1.5 text-[11px] font-semibold text-[#173D6D]"
+                              >
+                                ${Number(budget).toLocaleString("en-US")}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#526173]">
+                            What stage is this project currently in?
+                          </label>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-5">
+                            {projectStages.map((stage) => (
+                              <button
+                                key={stage}
+                                type="button"
+                                onClick={() => updateProject(index, "stage", stage)}
+                                className={`h-11 rounded-[15px] border px-3 text-[12px] font-semibold ${project.stage === stage ? "border-[#D9FF57]/70 bg-[#D9FF57] text-[#10233F]" : "border-white/70 bg-white/62 text-[#173D6D]"}`}
+                              >
+                                {stage}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}

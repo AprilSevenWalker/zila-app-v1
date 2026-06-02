@@ -2,6 +2,8 @@ import { GreetingSection } from "@/components/home/GreetingSection";
 import { CapitalCard } from "@/components/home/CapitalCard";
 import { HomeCommandBar } from "@/components/home/HomeCommandBar";
 import { InsightCard } from "@/components/home/InsightCard";
+import { OperatingFlowCard } from "@/components/home/OperatingFlowCard";
+import { OperationalHeroCard } from "@/components/home/OperationalHeroCard";
 import { AttentionPanel } from "@/components/home/AttentionPanel";
 import { ActiveFocusCard } from "@/components/home/ActiveFocusCard";
 import { BusinessList } from "@/components/home/BusinessList";
@@ -18,6 +20,10 @@ export default function HomePage() {
           <div className="space-y-3">
             <div className="px-1 pt-2">
               <GreetingSection />
+            </div>
+
+            <div>
+              <OperationalHeroCard />
             </div>
 
             <div className="pt-2">
@@ -41,6 +47,8 @@ export default function HomePage() {
             </div>
 
             <div className="space-y-4 pt-1">
+              <OperatingFlowCard />
+
               <div className="opacity-[0.96]">
                 <BusinessList />
               </div>

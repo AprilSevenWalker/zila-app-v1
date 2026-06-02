@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { getProofOverview } from "@/data/proof";
+import { getZilaUserProfile, subscribeToZilaSession } from "@/lib/demoSession";
 import { getOperationalProofRecords, operationalProofToTimelineItem, subscribeToOperationalProofRecords } from "@/lib/proof";
 import { getStoredProofTransactions, storedTransactionToTimelineItem, subscribeToProofTransactions } from "@/lib/proofTransactionStore";
 import {
@@ -13,7 +14,20 @@ import {
 import { ProofScreenContent } from "@/components/proof/ProofScreenContent";
 
 function buildOverview() {
-  const overview = getProofOverview();
+  const isDemo = getZilaUserProfile().isDemo;
+  const overview = isDemo
+    ? getProofOverview()
+    : {
+        statusTitle: "Proof layer prepared",
+        lastUpdate: "Waiting for first activity",
+        missingRecords: "No proof records yet",
+        syncStatus: "Ready to sync",
+        systemStatus: "Prepared",
+        operationsStatus: "Proof history starts when operational activity is recorded",
+        lastSynced: "Not synced yet",
+        needsAttention: "Start proof history by recording a payment, approval, reserve, supplier update, or project update.",
+        timeline: [],
+      };
   const operationalProofTimeline = getOperationalProofRecords().map(operationalProofToTimelineItem);
   const storedTimeline = getStoredProofTransactions().map(storedTransactionToTimelineItem);
   const reserveTimeline = getProtectedMoneyState().activity.map(protectedMoneyActivityToTimelineItem);
@@ -31,7 +45,7 @@ function buildOverview() {
     lastUpdate: liveTimeline[0] ? "Just now" : overview.lastUpdate,
     syncStatus: liveTimeline.length > 0 ? "Confirmed payout history synced" : overview.syncStatus,
     operationsStatus: operationalProofTimeline.length > 0 ? "Proof created from real project movement" : reserveTimeline.length > 0 ? "Protected money included in operational history" : overview.operationsStatus,
-    timeline: [...liveTimeline, ...overview.timeline],
+    timeline: [...liveTimeline, ...(isDemo ? overview.timeline : [])],
   };
 }
 
@@ -47,11 +61,13 @@ export function ProofScreenClient() {
     const unsubscribeProof = subscribeToProofTransactions(update);
     const unsubscribeOperationalProof = subscribeToOperationalProofRecords(update);
     const unsubscribeProtectedMoney = subscribeToProtectedMoney(update);
+    const unsubscribeSession = subscribeToZilaSession(update);
 
     return () => {
       unsubscribeProof();
       unsubscribeOperationalProof();
       unsubscribeProtectedMoney();
+      unsubscribeSession();
     };
   }, []);
 

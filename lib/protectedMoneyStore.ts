@@ -48,6 +48,7 @@ interface ProtectedMoneyState {
 }
 
 const STORAGE_KEY = "zila-protected-money";
+const ONBOARDING_SUMMARY_KEY = "zila-onboarding-operational-summary";
 const UPDATE_EVENT = "zila-protected-money-updated";
 
 function isBrowser() {
@@ -56,6 +57,38 @@ function isBrowser() {
 
 function isDemoWorkspace() {
   return isBrowser() && window.localStorage.getItem("zila-demo-mode") === "true";
+}
+
+function getOnboardingSummary() {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ONBOARDING_SUMMARY_KEY) || "null") as Partial<{
+      totalBalance: number;
+      protectedAmount: number;
+      committedAmount: number;
+      safeToSpend: number;
+    }> | null;
+
+    if (!parsed) {
+      return null;
+    }
+
+    const totalBalance = Number(parsed.totalBalance) || 0;
+    const protectedAmount = Number(parsed.protectedAmount) || 0;
+    const committedAmount = Number(parsed.committedAmount) || 0;
+
+    return {
+      totalBalance,
+      protectedAmount,
+      committedAmount,
+      safeToSpend: Math.max(Number(parsed.safeToSpend) || totalBalance - protectedAmount - committedAmount, 0),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function defaultState(): ProtectedMoneyState {
@@ -126,9 +159,10 @@ function buildInsight(category: ReserveCategory, reserveName: string, linkedProj
 }
 
 function calculateSummaryWithReserves(reserves: ProtectedReserve[]) {
-  const baseBalance = isDemoWorkspace() ? TOTAL_BALANCE : 0;
-  const baseProtected = isDemoWorkspace() ? BASE_PROTECTED : 0;
-  const baseCommitted = isDemoWorkspace() ? COMMITTED : 0;
+  const onboardingSummary = getOnboardingSummary();
+  const baseBalance = isDemoWorkspace() ? TOTAL_BALANCE : onboardingSummary?.totalBalance ?? 0;
+  const baseProtected = isDemoWorkspace() ? BASE_PROTECTED : onboardingSummary?.protectedAmount ?? 0;
+  const baseCommitted = isDemoWorkspace() ? COMMITTED : onboardingSummary?.committedAmount ?? 0;
   const totalBalance = baseBalance + getIncomingTotal() - getOutgoingPaymentTotal();
   const extraProtected = reserves.reduce((total, reserve) => total + reserve.amount, 0);
   const protectedAmount = baseProtected + extraProtected;

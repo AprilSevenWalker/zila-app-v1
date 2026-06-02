@@ -73,10 +73,10 @@ const desktopNavItems: DesktopNavItem[] = [
     description: "Verified movement",
   },
   {
-    label: "AI Memory",
+    label: "Ask Zila",
     href: "/ask",
     icon: BarChart3,
-    description: "Operating context",
+    description: "Business assistant",
   },
   {
     label: "Settings",
@@ -118,10 +118,10 @@ const homeNavItems: DesktopNavItem[] = [
     description: "Verified movement",
   },
   {
-    label: "AI Memory",
+    label: "Ask Zila",
     href: "/ask",
     icon: BarChart3,
-    description: "Operating context",
+    description: "Business assistant",
   },
   {
     label: "Settings",
@@ -143,9 +143,9 @@ const pageMeta: Record<string, { title: string; eyebrow: string; summary: string
     summary: "See where supplier timing, reserves, and runway are creating operational pressure.",
   },
   "/ask": {
-    title: "Operational update",
-    eyebrow: "Context",
-    summary: "Tell Zila what changed so projects, payments, reserves, and proof stay aligned.",
+    title: "Ask Zila",
+    eyebrow: "Assistant",
+    summary: "Ask about safe spend, payments due, project pressure, approvals, and what changed this week.",
   },
   "/payments": {
     title: "Payments",

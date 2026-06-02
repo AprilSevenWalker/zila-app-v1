@@ -6,6 +6,7 @@ import { ArrowRight, Clock3, FolderKanban, ShieldCheck } from "lucide-react";
 
 import { projects, type Project } from "@/data/projects";
 import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
+import { getZilaUserProfile, subscribeToZilaSession } from "@/lib/demoSession";
 
 const actionByTone = {
   warning: "Coordinate payout",
@@ -51,12 +52,22 @@ const stateStyles = {
 
 export function ProjectCarousel() {
   const [visibleProjects, setVisibleProjects] = useState<Project[]>([]);
+  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
-    const update = () => setVisibleProjects(mergeOperationalProjects(projects));
+    const update = () => {
+      setVisibleProjects(mergeOperationalProjects(projects));
+      setIsDemo(getZilaUserProfile().isDemo);
+    };
 
     update();
-    return subscribeToOperationalProjects(update);
+    const unsubscribeProjects = subscribeToOperationalProjects(update);
+    const unsubscribeSession = subscribeToZilaSession(update);
+
+    return () => {
+      unsubscribeProjects();
+      unsubscribeSession();
+    };
   }, []);
 
   return (
@@ -82,7 +93,14 @@ export function ProjectCarousel() {
         {visibleProjects.map((project) => {
           const style = stateStyles[project.statusTone];
           const isDark = project.statusTone === "warning" || project.statusTone === "info";
-          const action = actionByTone[project.statusTone];
+          const action = isDemo ? actionByTone[project.statusTone] : "Add first obligation";
+          const statusLabel = isDemo ? style.label : "Setup required";
+          const obligationLabel = isDemo
+            ? project.statusTone === "warning"
+              ? "due soon"
+              : "available for current commitments"
+            : "calculated after project costs are added";
+          const milestone = isDemo ? project.nextMilestone : "Add first obligation, supplier payout, or approval workflow";
 
           return (
             <Link
@@ -103,7 +121,7 @@ export function ProjectCarousel() {
                     <div className="min-w-0">
                       <h3 className={`truncate whitespace-nowrap text-[18px] font-semibold tracking-[-0.045em] ${isDark ? "text-white" : "text-[#121417]"}`}>{project.name}</h3>
                       <p className={`mt-0.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.14em] ${style.status}`}>
-                        {style.label}
+                        {statusLabel}
                       </p>
                     </div>
                   </div>
@@ -132,11 +150,11 @@ export function ProjectCarousel() {
                   <Clock3 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
                   <span className="min-w-0">
                     <span className="whitespace-nowrap font-semibold">{project.cashNeeded}</span>{" "}
-                    {project.statusTone === "warning" ? "due soon" : "available for current commitments"}
+                    {obligationLabel}
                   </span>
                 </p>
                 <p className={`text-[12px] leading-[1.45] ${isDark ? "text-[#C9D4F5]" : "text-[#667085]"}`}>
-                  {project.nextMilestone}
+                  {milestone}
                 </p>
               </div>
 

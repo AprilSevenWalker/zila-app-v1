@@ -17,12 +17,16 @@ import {
   type LatestPaymentTransaction,
 } from "@/lib/paymentTransactionStore";
 import { getZilaUserProfile, subscribeToZilaSession } from "@/lib/demoSession";
+import { projects as seedProjects, type Project } from "@/data/projects";
+import { mergeOperationalProjects, subscribeToOperationalProjects } from "@/lib/projectStore";
 
 export function BusinessList() {
   const [latestReserveActivity, setLatestReserveActivity] = useState<ReserveActivity | null>(null);
   const [latestAskUpdate, setLatestAskUpdate] = useState<AskOperationalUpdate | null>(null);
   const [latestPayment, setLatestPayment] = useState<LatestPaymentTransaction | null>(null);
   const [isDemo, setIsDemo] = useState(false);
+  const [visibleProjects, setVisibleProjects] = useState<Project[]>([]);
+  const [selectedRails, setSelectedRails] = useState<string[]>([]);
 
   useEffect(() => {
     const update = () => {
@@ -30,6 +34,13 @@ export function BusinessList() {
       setLatestAskUpdate(getAskOperationalUpdates()[0] ?? null);
       setLatestPayment(getLatestPaymentTransaction());
       setIsDemo(getZilaUserProfile().isDemo);
+      setVisibleProjects(mergeOperationalProjects(seedProjects));
+      try {
+        const rails = JSON.parse(window.localStorage.getItem("zila-onboarding-payment-rails") || "[]") as string[];
+        setSelectedRails(Array.isArray(rails) ? rails : []);
+      } catch {
+        setSelectedRails([]);
+      }
     };
 
     update();
@@ -37,16 +48,22 @@ export function BusinessList() {
     const unsubscribeAsk = subscribeToAskOperationalUpdates(update);
     const unsubscribePayment = subscribeToLatestPaymentTransaction(update);
     const unsubscribeSession = subscribeToZilaSession(update);
+    const unsubscribeProjects = subscribeToOperationalProjects(update);
 
     return () => {
       unsubscribeProtected();
       unsubscribeAsk();
       unsubscribePayment();
       unsubscribeSession();
+      unsubscribeProjects();
     };
   }, []);
 
-  const hasRealActivity = Boolean(latestReserveActivity || latestAskUpdate || latestPayment);
+  const firstProject = visibleProjects[0];
+  const projectListLabel =
+    visibleProjects.length > 1
+      ? `${firstProject?.name} and ${visibleProjects.length - 1} other project${visibleProjects.length === 2 ? "" : "s"}`
+      : firstProject?.name ?? "Workspace";
 
   return (
     <div className="pt-2">
@@ -139,7 +156,7 @@ export function BusinessList() {
               href="/proof"
             />
           </>
-        ) : hasRealActivity ? (
+        ) : (
           <>
             {latestPayment ? (
               <>
@@ -177,12 +194,83 @@ export function BusinessList() {
                 />
               </>
             ) : null}
+            <ChapterRow
+              icon={
+                <IconTile glow="mint" size="md" className="border-[#D7FF4F]/16 bg-gradient-to-br from-[#21457A] to-[#102347] text-[#F8FAFC]">
+                  <ShieldCheck className="h-[17px] w-[17px]" strokeWidth={1.75} />
+                </IconTile>
+              }
+              title="Workspace created"
+              subtitle={`${getZilaUserProfile().workspace} is ready for operational coordination`}
+              badge="Ready"
+              badgeColor="border border-[#D7FF4F]/24 bg-[#D7FF4F]/10 text-[#F1FFB8]"
+              href="/settings"
+            />
+            {firstProject ? (
+              <>
+                <ChapterRow
+                  icon={
+                    <IconTile glow="indigo" size="md" className="border-[#8F7CFF]/16 bg-gradient-to-br from-[#21457A] to-[#102347] text-[#F8FAFC]">
+                      <FolderKanban className="h-[17px] w-[17px]" strokeWidth={1.75} />
+                    </IconTile>
+                  }
+                  title={`${firstProject.name} added to workspace`}
+                  subtitle={`${firstProject.stage} stage · ${firstProject.budget} budget configured`}
+                  badge="Project"
+                  badgeColor="border border-[#8F7CFF]/24 bg-[#8F7CFF]/12 text-[#DCD6FF]"
+                  href="/projects"
+                />
+                <ChapterRow
+                  icon={
+                    <IconTile glow="cyan" size="md" className="border-[#7CF3FF]/14 bg-gradient-to-br from-[#21457A] to-[#102347] text-[#F8FAFC]">
+                      <CreditCard className="h-[17px] w-[17px]" strokeWidth={1.75} />
+                    </IconTile>
+                  }
+                  title={`${firstProject.name} budget configured`}
+                  subtitle={`${firstProject.remaining} safe to use after starter protection and commitments`}
+                  badge="Budget"
+                  badgeColor="border border-[#2F80FF]/24 bg-[#2F80FF]/12 text-[#BFD9FF]"
+                  href="/projects"
+                />
+              </>
+            ) : null}
+            <ChapterRow
+              icon={
+                <IconTile glow="cyan" size="md" className="border-[#7CF3FF]/14 bg-gradient-to-br from-[#21457A] to-[#102347] text-[#F8FAFC]">
+                  <CreditCard className="h-[17px] w-[17px]" strokeWidth={1.75} />
+                </IconTile>
+              }
+              title={selectedRails.length > 0 ? "Payment rails selected" : "Connect payment rail"}
+              subtitle={selectedRails.length > 0 ? selectedRails.join(" + ") : `Set up payouts for ${projectListLabel}`}
+              badge={selectedRails.length > 0 ? "Selected" : "Next"}
+              badgeColor="border border-[#2F80FF]/24 bg-[#2F80FF]/12 text-[#BFD9FF]"
+              href="/payments"
+            />
+            <ChapterRow
+              icon={
+                <IconTile glow="mint" size="md" className="border-[#D7FF4F]/16 bg-gradient-to-br from-[#21457A] to-[#102347] text-[#F8FAFC]">
+                  <ShieldCheck className="h-[17px] w-[17px]" strokeWidth={1.75} />
+                </IconTile>
+              }
+              title="Proof layer prepared"
+              subtitle="Proof history starts when payments, approvals, reserves, and updates are recorded"
+              badge="Prepared"
+              badgeColor="border border-[#D7FF4F]/24 bg-[#D7FF4F]/10 text-[#F1FFB8]"
+              href="/proof"
+            />
+            <ChapterRow
+              icon={
+                <IconTile glow="indigo" size="md" className="border-[#8F7CFF]/16 bg-gradient-to-br from-[#21457A] to-[#102347] text-[#F8FAFC]">
+                  <Brain className="h-[17px] w-[17px]" strokeWidth={1.75} />
+                </IconTile>
+              }
+              title="Operational memory activated"
+              subtitle={`Zila is ready to learn patterns across ${projectListLabel}`}
+              badge="Memory"
+              badgeColor="border border-[#8F7CFF]/24 bg-[#8F7CFF]/12 text-[#DCD6FF]"
+              href="/compare"
+            />
           </>
-        ) : (
-          <div className="rounded-[16px] border border-white/10 bg-[linear-gradient(180deg,rgba(25,55,101,0.72),rgba(16,35,71,0.64)_52%,rgba(11,23,48,0.62))] p-4 text-[#C9D4F5] shadow-[0_14px_30px_rgba(1,8,20,0.24),inset_0_1px_0_rgba(234,241,255,0.07)]">
-            <p className="text-[14px] font-semibold text-[#EAF1FF]">No activity recorded yet</p>
-            <p className="mt-1 text-[12px]">Payments, approvals, supplier updates, and project updates will appear here as your team works.</p>
-          </div>
         )}
       </div>
     </div>
